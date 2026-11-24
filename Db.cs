@@ -123,10 +123,13 @@ namespace ShopManager
             return Math.Floor(v / 5 + 0.5) * 5;
         }
 
-        /// <summary>يعيد تسعير كل الأصناف ذات نسبة الربح (غير الثابتة). يعيد عدد الأصناف المحدّثة.</summary>
+        /// <summary>
+        /// يعيد تسعير الأصناف المشتراة بالدولار ذات نسبة الربح بعد تغيير سعر الصرف. يعيد عدد الأصناف المحدّثة.
+        /// أصناف الليرة لا يؤثر عليها سعر الصرف، فلا تُمسّ (كي لا تُقرَّب أسعارها اليدوية لأقرب 5).
+        /// </summary>
         public static int RecalcPrices(double rate)
         {
-            return Exec("UPDATE Products SET SellPrice = ROUND(CostPrice*(1+Margin)*(CASE WHEN CostCurrency='USD' THEN @p0 ELSE 1 END)/5.0)*5 WHERE IFNULL(Margin,-1)>=0 AND IFNULL(CostPrice,0)>0", rate);
+            return Exec("UPDATE Products SET SellPrice = ROUND(CostPrice*(1+Margin)*@p0/5.0)*5 WHERE CostCurrency='USD' AND IFNULL(Margin,-1)>=0 AND IFNULL(CostPrice,0)>0", rate);
         }
 
         // ---------- لقطات الجداول للتراجع ----------

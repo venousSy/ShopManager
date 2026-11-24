@@ -201,7 +201,8 @@ namespace ShopManager
                     bool sellChanged = Math.Abs(Db.D(r["SellPrice"]) - os) > 0.0001;
                     bool inputsChanged = Math.Abs(cost - oc) > 1e-9 || cur != ocur || Math.Abs(mg - om) > 1e-9;
                     if (sellChanged && !inputsChanged) { r["Margin"] = -1; }          // تعديل يدوي ← سعر ثابت
-                    else if (mg >= 0 && cost > 0) r["SellPrice"] = Db.AutoPrice(cost, cur, mg, rate);
+                    // يُعاد حساب سعر البيع فقط إذا تغيّرت الكلفة أو العملة أو النسبة، لا عند تعديل الباركود أو المخزون
+                    else if (inputsChanged && mg >= 0 && cost > 0) r["SellPrice"] = Db.AutoPrice(cost, cur, mg, rate);
                 }
                 else if (mg >= 0 && cost > 0)
                 {
