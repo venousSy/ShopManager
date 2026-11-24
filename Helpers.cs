@@ -163,13 +163,34 @@ namespace ShopManager
             Reload();
         }
 
+        DataTable all;
+        SmartSearch index;
+
         void Reload()
         {
-            string q = "%" + txt.Text.Trim().Replace("%", "") + "%";
-            grid.DataSource = Db.Query(
-                "SELECT Id, Name AS \"الصنف\", Barcode AS \"الباركود\", SellPrice AS \"سعر البيع\", Stock AS \"المخزون\" " +
-                "FROM Products WHERE Name LIKE @p0 OR Barcode LIKE @p0 ORDER BY Name LIMIT 200", q);
+            if (all == null)
+            {
+                all = Db.Query("SELECT Id, Name, Barcode, SellPrice, Stock FROM Products ORDER BY Name");
+                index = new SmartSearch(all);
+            }
+            string q = txt.Text.Trim();
+            DataTable view = all.Clone();
+            if (q == "")
+            {
+                for (int i = 0; i < all.Rows.Count && i < 200; i++) view.ImportRow(all.Rows[i]);
+            }
+            else
+            {
+                // بحث ذكي: الأقرب أولاً، ثم الأصناف المشابهة (إملاء مختلف، خطأ إملائي، كلمات مشتركة)
+                var byId = new Dictionary<int, DataRow>();
+                foreach (DataRow r in all.Rows) byId[Convert.ToInt32(r["Id"])] = r;
+                foreach (var h in index.Search(q)) view.ImportRow(byId[h.Id]);
+            }
+            grid.DataSource = view;
             if (grid.Columns["Id"] != null) grid.Columns["Id"].Visible = false;
+            var heads = new Dictionary<string, string> { { "Name", "الصنف" }, { "Barcode", "الباركود" }, { "SellPrice", "سعر البيع" }, { "Stock", "المخزون" } };
+            foreach (var kv in heads) if (grid.Columns[kv.Key] != null) grid.Columns[kv.Key].HeaderText = kv.Value;
+            if (grid.Columns["Name"] != null) grid.Columns["Name"].FillWeight = 250;
         }
 
         void Choose()

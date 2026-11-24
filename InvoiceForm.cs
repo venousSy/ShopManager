@@ -253,9 +253,16 @@ namespace ShopManager
                 return;
             }
 
-            t = Db.Query("SELECT * FROM Products WHERE Name LIKE @p0 LIMIT 2", "%" + code + "%");
-            if (t.Rows.Count == 1) { Status("", false); AddProduct(t.Rows[0]); return; }
-            if (!sale && t.Rows.Count == 0 && OfferNewProduct("", code)) return;
+            // بحث ذكي بالاسم. يُضاف الصنف مباشرة فقط إن كان تطابقاً واضحاً وحيداً
+            // (كل الكلمات موجودة بلا أخطاء إملائية)، وإلا تُفتح قائمة مرتبة ليختار المستخدم.
+            var hits = SmartSearch.FromDb().Search(code);
+            var clear = SmartSearch.Clear(hits);
+            if (clear != null)
+            {
+                t = Db.Query("SELECT * FROM Products WHERE Id=@p0", clear.Id);
+                if (t.Rows.Count == 1) { Status("", false); AddProduct(t.Rows[0]); return; }
+            }
+            if (!sale && hits.Count == 0 && OfferNewProduct("", code)) return;
             OpenPicker(code);
         }
 

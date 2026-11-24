@@ -152,8 +152,16 @@ namespace ShopManager
 
         void ApplyFilter()
         {
-            string t = txtSearch.Text.Trim().Replace("'", "''").Replace("[", "").Replace("]", "").Replace("%", "").Replace("*", "");
-            tbl.DefaultView.RowFilter = t == "" ? "" : "Name LIKE '%" + t + "%' OR Barcode LIKE '%" + t + "%'";
+            string t = txtSearch.Text.Trim();
+            if (t == "") { tbl.DefaultView.RowFilter = ""; return; }
+            // بحث ذكي: التطابقات الواضحة فقط إن وُجدت (هذه شاشة تعديل، فلا نملؤها بأصناف بعيدة)،
+            // وإلا الأصناف المشابهة (خطأ إملائي أو كلمات مشتركة). الصفوف الجديدة غير المحفوظة تبقى ظاهرة.
+            var hits = new SmartSearch(tbl).Search(t, 1000);
+            var exact = hits.FindAll(h => h.Exact);
+            var use = exact.Count > 0 ? exact : hits;
+            var ids = new List<string>();
+            foreach (var h in use) ids.Add(h.Id.ToString(Inv));
+            tbl.DefaultView.RowFilter = ids.Count == 0 ? "Id IS NULL" : "Id IN (" + string.Join(",", ids) + ") OR Id IS NULL";
         }
 
         static string FixCurrency(object v)
