@@ -8,6 +8,9 @@
     <Nullable>disable</Nullable>
     <RootNamespace>ShopManager</RootNamespace>
     <AssemblyName>ShopManager</AssemblyName>
+    <!-- الواجهة مبنية بمقاسات ثابتة بالبكسل: نترك ويندوز يكبّر البرنامج كله بالتساوي (مع نص واضح)
+         بدل أن يكبر الخط وحده فيُقصّ داخل الأزرار والنوافذ على الشاشات المكبّرة 125% و150%. -->
+    <ApplicationHighDpiMode>DpiUnawareGdiScaled</ApplicationHighDpiMode>
   </PropertyGroup>
 
   <ItemGroup>

@@ -607,9 +607,11 @@ namespace ShopManager
                 lblRemain.ForeColor = rem > 0 ? Color.Firebrick : Color.DarkGreen;
                 if (sale)
                 {
+                    // ما دُفع زيادة على الفاتورة يُعرض مخصوماً من الدين السابق (يُسأل عنه عند الحفظ)
+                    double due = cachedPrev + rem - Math.Max(paid - net, 0);
                     lblPrev.Text = cachedPrev.ToString("N0");
-                    lblDue.Text = (cachedPrev + rem).ToString("N0");
-                    lblDue.ForeColor = (cachedPrev + rem) > 0 ? Color.Firebrick : Color.DarkGreen;
+                    lblDue.Text = due.ToString("N0");
+                    lblDue.ForeColor = due > 0 ? Color.Firebrick : Color.DarkGreen;
                 }
             }
             finally { busy = false; }
