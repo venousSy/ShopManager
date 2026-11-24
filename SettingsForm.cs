@@ -14,13 +14,16 @@ namespace ShopManager
         readonly TextBox txtCapital = new TextBox();
         readonly TextBox txtLimit = new TextBox();
         readonly TextBox txtFreeze = new TextBox();
+        readonly ComboBox cmbPrintMode = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+        readonly ComboBox cmbPrinter = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+        const string DefaultPrinterLabel = "(الطابعة الافتراضية في ويندوز)";
         readonly UndoStack undo = new UndoStack();
 
         public SettingsForm()
         {
             UI.Rtl(this);
             Text = "الإعدادات";
-            Width = 620; Height = 680;
+            Width = 620; Height = 820;
             KeyPreview = true;
             KeyDown += (a, b) => { if (b.Control && b.KeyCode == Keys.Z && !(ActiveControl is TextBox)) { b.Handled = true; DoUndo(); } };
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -38,6 +41,12 @@ namespace ShopManager
             Row(tl, "حدّ الدين الذي توضع بجانبه إشارة (ل.س)", txtLimit);
             Row(tl, "تجميد الدين بعد كم يوماً بلا حركة", txtFreeze);
 
+            cmbPrintMode.Items.AddRange(new object[] { "ورق A4 (مع معاينة)", "إيصال حراري 80mm (طباعة مباشرة)" });
+            cmbPrinter.Items.Add(DefaultPrinterLabel);
+            try { foreach (string p in System.Drawing.Printing.PrinterSettings.InstalledPrinters) cmbPrinter.Items.Add(p); } catch { }
+            Row(tl, "طباعة فاتورة البيع", cmbPrintMode);
+            Row(tl, "طابعة الإيصالات", cmbPrinter);
+
             LoadValues();
 
             var btnSave = new Button { Text = "حفظ الإعدادات", Dock = DockStyle.Top, Height = 44 };
@@ -46,16 +55,19 @@ namespace ShopManager
             btnUndo.Dock = DockStyle.Top; btnUndo.AutoSize = false; btnUndo.Height = 44; btnUndo.Margin = new Padding(0);
             var btnBackup = new Button { Text = "نسخة احتياطية من البيانات", Dock = DockStyle.Top, Height = 44 };
             btnBackup.Click += (a, b) => Backup();
+            var btnTestReceipt = new Button { Text = "معاينة إيصال تجريبي (80mm)", Dock = DockStyle.Top, Height = 44 };
+            btnTestReceipt.Click += (a, b) => InvoicePrinter.PreviewReceipt();
             var info = new Label { Dock = DockStyle.Top, Height = 60, Padding = new Padding(20, 10, 20, 0), Text = "ملف البيانات: " + Db.DbPath };
 
             Controls.Add(info);
+            Controls.Add(btnTestReceipt);
             Controls.Add(btnBackup);
             Controls.Add(btnUndo);
             Controls.Add(btnSave);
             Controls.Add(tl);
         }
 
-        static void Row(TableLayoutPanel tl, string label, TextBox tb)
+        static void Row(TableLayoutPanel tl, string label, Control tb)
         {
             tl.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Right, Margin = new Padding(3, 10, 3, 10) });
             tb.Dock = DockStyle.Fill;
@@ -72,6 +84,11 @@ namespace ShopManager
             txtCapital.Text = Db.Get("opening_capital", "0");
             txtLimit.Text = Db.Get("debt_limit", "200000");
             txtFreeze.Text = Db.Get("freeze_days", "20");
+            cmbPrintMode.SelectedIndex = Db.Get("print_mode", InvoicePrinter.ModeA4) == InvoicePrinter.ModeReceipt ? 1 : 0;
+            string pr = Db.Get("receipt_printer", "");
+            int pi = pr == "" ? 0 : cmbPrinter.Items.IndexOf(pr);
+            if (pi < 0) { cmbPrinter.Items.Add(pr); pi = cmbPrinter.Items.Count - 1; }   // طابعة محفوظة غير موصولة الآن
+            cmbPrinter.SelectedIndex = pi;
         }
 
         void DoUndo()
@@ -97,6 +114,9 @@ namespace ShopManager
             Db.Set("opening_capital", Db.Num(txtCapital.Text).ToString(inv));
             Db.Set("debt_limit", (Db.Num(txtLimit.Text) > 0 ? Db.Num(txtLimit.Text) : 200000).ToString(inv));
             Db.Set("freeze_days", ((int)Db.Num(txtFreeze.Text) > 0 ? (int)Db.Num(txtFreeze.Text) : 20).ToString(inv));
+            Db.Set("print_mode", cmbPrintMode.SelectedIndex == 1 ? InvoicePrinter.ModeReceipt : InvoicePrinter.ModeA4);
+            string printer = Convert.ToString(cmbPrinter.SelectedItem);
+            Db.Set("receipt_printer", printer == DefaultPrinterLabel ? "" : printer);
 
             string msg = "تم الحفظ.";
             if (Math.Abs(newRate - oldRate) > 1e-9)
