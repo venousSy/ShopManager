@@ -128,7 +128,7 @@ namespace ShopManager
             {
                 grid.EndEdit();
                 BindingContext[tbl].EndCurrentEdit();
-                DataTable snap = Db.Snapshot("Expenses");
+                var ch = Db.TableChange.Begin("Expenses");
                 suspend = true;
                 try
                 {
@@ -142,8 +142,9 @@ namespace ShopManager
                     ad.Update(tbl);
                 }
                 finally { suspend = false; }
+                Action undoSave = ch.End();
                 undo.Clear();
-                undo.Push("حفظ المصاريف", () => { Db.Restore("Expenses", snap); Reload(); });
+                undo.Push("حفظ المصاريف", () => { undoSave(); Reload(); });
                 Reload();
             }
             catch (Exception ex)

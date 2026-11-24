@@ -87,8 +87,8 @@ namespace ShopManager
             if (newRate <= 0) { UI.Warn(this, "سعر الصرف غير صحيح."); return; }
             double oldRate = Db.Rate;
             var inv = System.Globalization.CultureInfo.InvariantCulture;
-            DataTable snapSettings = Db.Snapshot("Settings");
-            DataTable snapProducts = Db.Snapshot("Products");
+            var chSettings = Db.TableChange.Begin("Settings");
+            var chProducts = Db.TableChange.Begin("Products");
 
             Db.Set("shop_name", txtName.Text.Trim());
             Db.Set("shop_phone", txtPhone.Text.Trim());
@@ -104,7 +104,9 @@ namespace ShopManager
                 int n = Db.RecalcPrices(newRate);
                 msg += "\nتم تحديث أسعار البيع حسب سعر الصرف الجديد (" + newRate.ToString("0.##", inv) + ") لـ " + n + " صنف. الأصناف ذات السعر الثابت لم تتغير.";
             }
-            undo.Push("حفظ الإعدادات", () => { Db.Restore("Settings", snapSettings); Db.Restore("Products", snapProducts); });
+            // التراجع يعيد الإعدادات وأسعار البيع التي غيّرها هذا الحفظ فقط، ولا يمسّ المخزون أو ما تغيّر بعده
+            Action undoSettings = chSettings.End(), undoProducts = chProducts.End();
+            undo.Push("حفظ الإعدادات", () => { undoSettings(); undoProducts(); });
             UI.Info(this, msg);
         }
 
@@ -112,7 +114,7 @@ namespace ShopManager
         {
             using (var dlg = new SaveFileDialog())
             {
-                dlg.FileName = "shop_backup_" + DateTime.Now.ToString("yyyyMMdd") + ".db";
+                dlg.FileName = "shop_backup_" + DateTime.Now.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture) + ".db";
                 dlg.Filter = "Database|*.db";
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 File.Copy(Db.DbPath, dlg.FileName, true);

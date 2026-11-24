@@ -233,9 +233,9 @@ namespace ShopManager
         {
             if (grid.CurrentRow == null) { UI.Warn(this, "اختر سطراً أولاً."); return; }
             int id = Convert.ToInt32(grid.CurrentRow.Cells["Id"].Value);
-            DataTable snap = Db.Snapshot("ProductAliases");
+            var ch = Db.TableChange.Begin("ProductAliases");
             Db.Exec("DELETE FROM ProductAliases WHERE Id=@p0", id);
-            undo.Push("حذف ربط", () => Db.Restore("ProductAliases", snap));
+            undo.Push("حذف ربط", ch.End());
             Reload();
         }
     }

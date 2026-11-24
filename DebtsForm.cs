@@ -141,7 +141,7 @@ namespace ShopManager
             int id; string name;
             if (!Row(gridF, out id, out name)) return;
             Db.Unfreeze(id);
-            undo.Push("إلغاء تجميد " + name, () => Db.Exec("UPDATE Customers SET Frozen=1, FrozenDate=@p1 WHERE Id=@p0", id, DateTime.Today.ToString("yyyy-MM-dd")));
+            undo.Push("إلغاء تجميد " + name, () => Db.Exec("UPDATE Customers SET Frozen=1, FrozenDate=@p1 WHERE Id=@p0", id, DateTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)));
             RefreshAll();
         }
     }

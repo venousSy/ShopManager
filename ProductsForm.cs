@@ -62,7 +62,9 @@ namespace ShopManager
 
             conn = Db.Open();
             ad = new SQLiteDataAdapter("SELECT Id,Name,Barcode,Category,CostPrice,CostCurrency,Margin,SellPrice,Stock,MinStock FROM Products ORDER BY Category, Name", conn);
-            cb = new SQLiteCommandBuilder(ad);
+            // التحديث بالمعرّف فقط (لا مقارنة بكل القيم القديمة) حتى لا يفشل الحفظ لأن البيع غيّر المخزون؛
+            // المخزون نفسه يُحدَّث من قاعدة البيانات قبل الحفظ في RefreshUntouchedStock.
+            cb = new SQLiteCommandBuilder(ad) { ConflictOption = ConflictOption.OverwriteChanges };
 
             grid.DefaultValuesNeeded += (a, b) =>
             {
@@ -217,12 +219,13 @@ namespace ShopManager
                     UI.Warn(this, "حدّد القسم لهذه الأصناف قبل الحفظ (ليوضع كل صنف مع أصنافه):\n" + string.Join("\n", noCat.GetRange(0, Math.Min(noCat.Count, 10))));
                     return false;
                 }
-                DataTable snap = Db.Snapshot("Products");
+                var ch = Db.TableChange.Begin("Products");
                 suspend = true;
-                try { Normalize(); ad.Update(tbl); }
+                try { Normalize(); RefreshUntouchedStock(); ad.Update(tbl); }
                 finally { suspend = false; }
+                Action undoSave = ch.End();
                 undo.Clear();
-                undo.Push("حفظ تعديلات الأصناف", () => { Db.Restore("Products", snap); Reload(); });
+                undo.Push("حفظ تعديلات الأصناف", () => { undoSave(); Reload(); });
                 Reload();
                 if (!silent) UI.Info(this, "تم حفظ التعديلات.");
                 return true;
@@ -231,6 +234,21 @@ namespace ShopManager
             {
                 UI.Warn(this, "تعذّر الحفظ (قد يكون اسم أو باركود مكرراً): " + ex.Message);
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// الجدول قد يكون مفتوحاً منذ مدة وبيعت أصناف من نافذة الفاتورة. للصفوف المعدّلة التي لم يغيّر
+        /// المستخدم مخزونها، نقرأ المخزون الحالي من قاعدة البيانات كي لا يُكتب الرقم القديم فوق البيع.
+        /// </summary>
+        void RefreshUntouchedStock()
+        {
+            foreach (DataRow r in tbl.Rows)
+            {
+                if (r.RowState != DataRowState.Modified) continue;
+                if (!Equals(r["Stock", DataRowVersion.Original], r["Stock", DataRowVersion.Current])) continue;
+                object cur = Db.Scalar("SELECT Stock FROM Products WHERE Id=@p0", r["Id"]);
+                if (cur != null && !(cur is DBNull)) r["Stock"] = cur;
             }
         }
 
@@ -256,11 +274,11 @@ namespace ShopManager
             if (items == 0) { UI.Warn(this, "لا يوجد مخزون مسجّل. اكتب كميات الجرد في عمود (المخزون) أولاً."); return; }
             if (!UI.Confirm(this, "اعتماد المخزون الحالي كمخزون افتتاحي؟\n\nعدد الأصناف: " + items + "\nالقيمة بسعر الشراء: " + value.ToString("N0") +
                                   " ل.س (الدولار بسعر الصرف " + rate.ToString("0.##", Inv) + ")\n\nتظهر هذه القيمة في التقارير ضمن رأس المال المبدئي.")) return;
-            DataTable snap = Db.Snapshot("Settings");
+            var ch = Db.TableChange.Begin("Settings");
             Db.Set("opening_stock_value", value.ToString(Inv));
             Db.Set("opening_stock_items", items.ToString(Inv));
             Db.Set("opening_stock_date", DateTime.Today.ToString("yyyy-MM-dd", Inv));
-            undo.Push("اعتماد المخزون الافتتاحي", () => Db.Restore("Settings", snap));
+            undo.Push("اعتماد المخزون الافتتاحي", ch.End());
             UI.Info(this, "تم اعتماد المخزون الافتتاحي: " + value.ToString("N0") + " ل.س. يمكنك رؤيته في صفحة التقارير.");
         }
 
@@ -274,7 +292,7 @@ namespace ShopManager
                 if (File.Exists(guess)) { dlg.InitialDirectory = AppDomain.CurrentDomain.BaseDirectory; dlg.FileName = "products_import.csv"; }
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
-                DataTable snap = Db.Snapshot("Products");
+                var ch = Db.TableChange.Begin("Products");
                 int added = 0, updated = 0, failed = 0;
                 string[] lines = File.ReadAllLines(dlg.FileName, Encoding.UTF8);
                 using (var c = Db.Open())
@@ -317,7 +335,8 @@ namespace ShopManager
                     tx.Commit();
                 }
                 undo.Clear();
-                undo.Push("استيراد الأصناف", () => { Db.Restore("Products", snap); Reload(); });
+                Action undoImport = ch.End();
+                undo.Push("استيراد الأصناف", () => { undoImport(); Reload(); });
                 Reload();
                 UI.Info(this, "تم الاستيراد (مرتّب حسب الأقسام).\nأصناف جديدة: " + added + "\nأصناف محدّثة: " + updated + (failed > 0 ? "\nسطور فشلت (باركود مكرر غالباً): " + failed : ""));
             }

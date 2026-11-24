@@ -228,8 +228,9 @@ namespace ShopManager
         public string Undo()
         {
             if (st.Count == 0) return null;
-            var e = st.Pop();
-            e.Value();
+            var e = st.Peek();
+            e.Value();          // إن فشل التراجع يبقى في المكدّس ليمكن إعادة المحاولة بعد إصلاح السبب
+            st.Pop();
             return e.Key;
         }
 
@@ -573,6 +574,7 @@ namespace ShopManager
                     customer ? "C" : "S", id, amount, "", cur, rate);
                 long pid = Db.LastId(c, tx);
                 tx.Commit();
+                if (customer) Db.Unfreeze(id);     // أي دفعة تعيد الدين المجمّد إلى الجاري
                 return pid;
             }
         }

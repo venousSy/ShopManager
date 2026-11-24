@@ -162,10 +162,10 @@ namespace ShopManager
             if (phone == null) phone = oldPhone;
             try
             {
-                DataTable snap = Db.Snapshot(table);
+                var ch = Db.TableChange.Begin(table);
                 if (edit) Db.Exec("UPDATE " + table + " SET Name=@p0, Phone=@p1 WHERE Id=@p2", name, phone.Trim(), id);
                 else Db.Exec("INSERT INTO " + table + "(Name,Phone) VALUES(@p0,@p1)", name, phone.Trim());
-                undo.Push(edit ? "تعديل " + oldName : "إضافة " + name, () => Db.Restore(table, snap));
+                undo.Push(edit ? "تعديل " + oldName : "إضافة " + name, ch.End());
                 Reload();
             }
             catch (Exception ex)
@@ -178,14 +178,17 @@ namespace ShopManager
         {
             int id; string name;
             if (!Current(out id, out name)) return;
+            // الحركات تشمل الفواتير والدفعات والمرتجعات، وللزبون أيضاً الرصيد السابق المستورد
             long moves = cust
-                ? Convert.ToInt64(Db.Scalar("SELECT (SELECT COUNT(*) FROM Sales WHERE CustomerId=@p0) + (SELECT COUNT(*) FROM Payments WHERE PartyType='C' AND PartyId=@p0)", id))
-                : Convert.ToInt64(Db.Scalar("SELECT (SELECT COUNT(*) FROM Purchases WHERE SupplierId=@p0) + (SELECT COUNT(*) FROM Payments WHERE PartyType='S' AND PartyId=@p0)", id));
-            if (moves > 0) { UI.Warn(this, "لا يمكن حذف \"" + name + "\" لأن له حركات مسجّلة. يمكنك تعديل اسمه بدل حذفه."); return; }
+                ? Convert.ToInt64(Db.Scalar("SELECT (SELECT COUNT(*) FROM Sales WHERE CustomerId=@p0) + (SELECT COUNT(*) FROM Payments WHERE PartyType='C' AND PartyId=@p0)" +
+                                            " + (SELECT COUNT(*) FROM SaleReturns WHERE CustomerId=@p0) + (SELECT COUNT(*) FROM Customers WHERE Id=@p0 AND IFNULL(OpeningBalance,0)<>0)", id))
+                : Convert.ToInt64(Db.Scalar("SELECT (SELECT COUNT(*) FROM Purchases WHERE SupplierId=@p0) + (SELECT COUNT(*) FROM Payments WHERE PartyType='S' AND PartyId=@p0)" +
+                                            " + (SELECT COUNT(*) FROM PurchaseReturns WHERE SupplierId=@p0)", id));
+            if (moves > 0) { UI.Warn(this, "لا يمكن حذف \"" + name + "\" لأن له حركات أو رصيداً مسجّلاً. يمكنك تعديل اسمه بدل حذفه."); return; }
             if (!UI.Confirm(this, "حذف \"" + name + "\"؟")) return;
-            DataTable snap = Db.Snapshot(table);
+            var ch = Db.TableChange.Begin(table);
             Db.Exec("DELETE FROM " + table + " WHERE Id=@p0", id);
-            undo.Push("حذف " + name, () => Db.Restore(table, snap));
+            undo.Push("حذف " + name, ch.End());
             Reload();
         }
 
@@ -215,7 +218,7 @@ namespace ShopManager
                 if (!UI.Confirm(this, "استيراد الزبائن وأرصدتهم من الملف؟\nالأسماء الجديدة تُضاف، والموجودة يُحدَّث رصيدها الافتتاحي. (يمكنك التراجع بعده)")) return;
 
                 string[] lines = File.ReadAllLines(dlg.FileName, Encoding.UTF8);
-                DataTable snap = Db.Snapshot("Customers");
+                var ch = Db.TableChange.Begin("Customers");
                 string today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                 int added = 0, updated = 0, failed = 0;
                 double totalDebt = 0;
@@ -251,8 +254,8 @@ namespace ShopManager
                     }
                     tx.Commit();
                 }
-                undo.Push("استيراد الزبائن", () => Db.Restore("Customers", snap));
                 DataTable frozen = Db.FreezeStaleDebts();
+                undo.Push("استيراد الزبائن", ch.End());   // بعد التجميد ليُلغى معه
                 double frozenSum = 0;
                 foreach (DataRow r in frozen.Rows) frozenSum += Db.D(r["Bal"]);
                 Reload();

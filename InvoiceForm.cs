@@ -35,6 +35,8 @@ namespace ShopManager
         bool busy;
         int lastId;
         double lastRemaining;
+        double lastExtra;          // ما دفعه الزبون زيادة على الفاتورة وسُجّل دفعةً من دينه السابق
+        long lastExtraPayId;
         readonly int editId;
         int lastSavedId;
         bool closeOnShow;
@@ -644,9 +646,16 @@ namespace ShopManager
             if (print && sale) InvoicePrinter.ShowSale(id);
             ClearForm(false);
             LoadParties();
-            undo.Push("حفظ الفاتورة رقم " + id, () => { Db.CancelInvoice(wasSale, id); RestoreDraft(saved); });
+            long extraPayId = lastExtraPayId;
+            undo.Push("حفظ الفاتورة رقم " + id, () =>
+            {
+                Db.CancelInvoice(wasSale, id);
+                if (extraPayId > 0) Db.Exec("DELETE FROM Payments WHERE Id=@p0", extraPayId);
+                RestoreDraft(saved);
+            });
             string msg = "تم حفظ " + (sale ? "فاتورة البيع" : "فاتورة المشتريات") + " رقم " + id;
             if (sale && lastRemaining > 0) msg += " — وأُضيف المتبقي " + lastRemaining.ToString("N0") + " ل.س إلى ديون الزبون (يظهر في: الديون ← فواتير الدين)";
+            if (sale && lastExtra > 0) msg += " — وسُجّل " + lastExtra.ToString("N0") + " ل.س دفعةً من الدين السابق للزبون";
             if (!sale && lastChanged > 0) msg += " — وتحدّث سعر الشراء وسعر البيع لـ " + lastChanged + " صنف في قائمة الأصناف";
             Status(msg, false);
         }
@@ -670,9 +679,20 @@ namespace ShopManager
             double disc = Db.Num(txtDiscount.Text);
             double net = Math.Max(sub - disc, 0);
             double paid = string.IsNullOrWhiteSpace(txtPaid.Text) ? net : Db.Num(txtPaid.Text);
-            if (paid > net) paid = net;
-            double rem = Math.Max(net - paid, 0);
             string party = cmbParty.Text.Trim();
+            lastExtra = 0; lastExtraPayId = 0;
+            double extra = 0;
+            if (paid > net + 1e-9)
+            {
+                // الزبون دفع أكثر من الفاتورة: إمّا تسديد من دينه السابق، أو باقٍ رُدّ له نقداً
+                if (sale && editId <= 0 && party != "" &&
+                    UI.Confirm(this, "المدفوع أكبر من صافي الفاتورة بـ " + (paid - net).ToString("N0") + " ل.س.\n" +
+                                     "هل يُسجَّل الزائد دفعةً من الدين السابق للزبون \"" + party + "\"؟\n\n" +
+                                     "(اختر \"لا\" إن كان الزائد قد رُدّ للزبون كباقٍ)"))
+                    extra = paid - net;
+                paid = net;
+            }
+            double rem = Math.Max(net - paid, 0);
 
             if (rem > 0 && party == "")
             {
@@ -766,6 +786,13 @@ namespace ShopManager
                             Db.ExecTx(c, tx, "INSERT INTO SaleItems(SaleId,ProductId,Name,Qty,UnitPrice,UnitCost) VALUES(@p0,@p1,@p2,@p3,@p4,@p5)",
                                 saleId, l.Id, l.Name, l.Qty, l.Price, cost);
                             Db.ExecTx(c, tx, "UPDATE Products SET Stock=IFNULL(Stock,0)-@p0 WHERE Id=@p1", l.Qty, l.Id);
+                        }
+                        if (extra > 0 && partyId != 0)
+                        {
+                            Db.ExecTx(c, tx, "INSERT INTO Payments(Date,PartyType,PartyId,Amount,Note,Currency,Rate) VALUES(@p0,'C',@p1,@p2,@p3,'SYP',1)",
+                                now, partyId, extra, "مع فاتورة البيع رقم " + saleId);
+                            lastExtraPayId = Db.LastId(c, tx);
+                            lastExtra = extra;
                         }
                         lastId = (int)saleId;
                     }

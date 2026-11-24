@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.SQLite;
 using System.Globalization;
@@ -159,6 +160,76 @@ namespace ShopManager
             }
         }
 
+        /// <summary>
+        /// تراجع دقيق: لقطة قبل الإجراء وأخرى بعده، والتراجع يعكس الفرق بينهما فقط
+        /// (الصفوف والأعمدة التي غيّرها هذا الإجراء)، فلا يمسّ ما حدث بعده من بيع أو إضافة في نوافذ أخرى.
+        /// الاستخدام: var ch = Db.TableChange.Begin("Products"); ...الإجراء...; undo.Push("...", ch.End());
+        /// </summary>
+        public sealed class TableChange
+        {
+            readonly string table;
+            readonly DataTable before;
+            TableChange(string table) { this.table = table; before = Snapshot(table); }
+
+            public static TableChange Begin(string table) { return new TableChange(table); }
+
+            /// <summary>يلتقط الحالة بعد الإجراء ويعيد عملية التراجع.</summary>
+            public Action End()
+            {
+                DataTable after = Snapshot(table);
+                string t = table; DataTable b = before;
+                return () => Revert(t, b, after);
+            }
+        }
+
+        static string KeyOf(DataTable t) { return t.Columns.Contains("Id") ? "Id" : "K"; }
+
+        static Dictionary<string, DataRow> Index(DataTable t, string key)
+        {
+            var d = new Dictionary<string, DataRow>();
+            foreach (DataRow r in t.Rows) d[Convert.ToString(r[key], CultureInfo.InvariantCulture)] = r;
+            return d;
+        }
+
+        /// <summary>يعكس الفرق بين لقطتين: يحذف ما أُضيف، ويعيد ما حُذف، ويرجع قيم الأعمدة التي تغيّرت فقط.</summary>
+        public static void Revert(string table, DataTable before, DataTable after)
+        {
+            string key = KeyOf(before);
+            var b = Index(before, key);
+            var a = Index(after, key);
+            using (var c = Open())
+            using (var tx = c.BeginTransaction())
+            {
+                try
+                {
+                    foreach (var kv in a)
+                        if (!b.ContainsKey(kv.Key))
+                            ExecTx(c, tx, "DELETE FROM " + table + " WHERE " + key + "=@p0", kv.Value[key]);
+                    foreach (var kv in b)
+                    {
+                        DataRow br = kv.Value;
+                        DataRow ar;
+                        if (!a.TryGetValue(kv.Key, out ar))
+                        {
+                            // أُعيد إدراجه فقط إن لم يُنشأ صف بنفس المفتاح لاحقاً
+                            if (ScalarTx(c, tx, "SELECT 1 FROM " + table + " WHERE " + key + "=@p0", br[key]) == null)
+                                InsertRow(c, tx, table, br);
+                            continue;
+                        }
+                        foreach (DataColumn col in before.Columns)
+                        {
+                            if (col.ColumnName == key) continue;
+                            if (Equals(br[col.ColumnName], ar[col.ColumnName])) continue;
+                            ExecTx(c, tx, "UPDATE " + table + " SET " + col.ColumnName + "=@p0 WHERE " + key + "=@p1",
+                                br[col.ColumnName] is DBNull ? null : br[col.ColumnName], br[key]);
+                        }
+                    }
+                    tx.Commit();
+                }
+                catch { tx.Rollback(); throw; }
+            }
+        }
+
         // ---------- إلغاء فاتورة وإعادتها ----------
         public static void CancelInvoice(bool sale, int id)
         {
@@ -167,6 +238,9 @@ namespace ShopManager
             {
                 try
                 {
+                    long returns = Convert.ToInt64(ScalarTx(c, tx, sale ? "SELECT COUNT(*) FROM SaleReturns WHERE SaleId=@p0" : "SELECT COUNT(*) FROM PurchaseReturns WHERE PurchaseId=@p0", id));
+                    if (returns > 0)
+                        throw new InvalidOperationException("على هذه الفاتورة مرتجعات. ألغِ المرتجع من صفحة المرتجعات أولاً ثم ألغِ الفاتورة.");
                     var items = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<int, double>>();
                     string sel = sale ? "SELECT ProductId, Qty FROM SaleItems WHERE SaleId=@p0" : "SELECT ProductId, Qty FROM PurchaseItems WHERE PurchaseId=@p0";
                     using (var cmd = Cmd(c, sel, new object[] { id }, tx))
@@ -302,7 +376,20 @@ namespace ShopManager
                 "CREATE TABLE IF NOT EXISTS SaleReturnItems(Id INTEGER PRIMARY KEY AUTOINCREMENT, ReturnId INTEGER, ProductId INTEGER, Name TEXT, Qty REAL, UnitPrice REAL, UnitCost REAL)",
                 "CREATE TABLE IF NOT EXISTS PurchaseReturns(Id INTEGER PRIMARY KEY AUTOINCREMENT, Date TEXT, PurchaseId INTEGER, SupplierId INTEGER, Currency TEXT, Rate REAL, Total REAL, DebtReduction REAL, RefundCash REAL)",
                 "CREATE TABLE IF NOT EXISTS PurchaseReturnItems(Id INTEGER PRIMARY KEY AUTOINCREMENT, ReturnId INTEGER, ProductId INTEGER, Qty REAL, UnitCost REAL)",
-                "CREATE TABLE IF NOT EXISTS Payments(Id INTEGER PRIMARY KEY AUTOINCREMENT, Date TEXT, PartyType TEXT, PartyId INTEGER, Amount REAL, Note TEXT, Currency TEXT DEFAULT 'SYP', Rate REAL DEFAULT 1)"
+                "CREATE TABLE IF NOT EXISTS Payments(Id INTEGER PRIMARY KEY AUTOINCREMENT, Date TEXT, PartyType TEXT, PartyId INTEGER, Amount REAL, Note TEXT, Currency TEXT DEFAULT 'SYP', Rate REAL DEFAULT 1)",
+                // فهارس لتسريع حساب الأرصدة والفواتير مع كبر البيانات
+                "CREATE INDEX IF NOT EXISTS ix_sales_customer ON Sales(CustomerId)",
+                "CREATE INDEX IF NOT EXISTS ix_sales_date ON Sales(Date)",
+                "CREATE INDEX IF NOT EXISTS ix_saleitems_sale ON SaleItems(SaleId)",
+                "CREATE INDEX IF NOT EXISTS ix_purchases_supplier ON Purchases(SupplierId)",
+                "CREATE INDEX IF NOT EXISTS ix_purchaseitems_purchase ON PurchaseItems(PurchaseId)",
+                "CREATE INDEX IF NOT EXISTS ix_payments_party ON Payments(PartyType, PartyId)",
+                "CREATE INDEX IF NOT EXISTS ix_salereturns_sale ON SaleReturns(SaleId)",
+                "CREATE INDEX IF NOT EXISTS ix_salereturns_customer ON SaleReturns(CustomerId)",
+                "CREATE INDEX IF NOT EXISTS ix_salereturnitems_ret ON SaleReturnItems(ReturnId)",
+                "CREATE INDEX IF NOT EXISTS ix_purchasereturns_purchase ON PurchaseReturns(PurchaseId)",
+                "CREATE INDEX IF NOT EXISTS ix_purchasereturns_supplier ON PurchaseReturns(SupplierId)",
+                "CREATE INDEX IF NOT EXISTS ix_purchasereturnitems_ret ON PurchaseReturnItems(ReturnId)"
             };
             foreach (var s in ddl) Exec(s);
 
