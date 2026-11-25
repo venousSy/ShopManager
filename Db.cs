@@ -433,6 +433,12 @@ namespace ShopManager
             if (!hasCur) Exec("ALTER TABLE Payments ADD COLUMN Currency TEXT DEFAULT 'SYP'");
             if (!hasRate) Exec("ALTER TABLE Payments ADD COLUMN Rate REAL DEFAULT 1");
 
+            // نطاق أرقام الحركات لكل وردية (لعرض تفاصيلها في سجل الورديات)، مثل: Sales=12-20;Payments=3-5
+            bool hasMarks = false;
+            foreach (DataRow r in Query("PRAGMA table_info(Shifts)").Rows)
+                if (Convert.ToString(r["name"]) == "Marks") hasMarks = true;
+            if (!hasMarks) Exec("ALTER TABLE Shifts ADD COLUMN Marks TEXT");
+
             // من قام بالعملية: عمود UserId يُملأ تلقائياً بالمستخدم الحالي (Settings.session_user) عند الإضافة.
             // الشرط "NEW.UserId IS NULL" يحفظ المستخدم الأصلي عند إعادة إدراج صف بالتراجع.
             foreach (var t in new[] { "Sales", "SaleReturns", "Payments", "Purchases", "PurchaseReturns", "Expenses", "Shifts" })

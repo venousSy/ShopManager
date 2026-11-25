@@ -86,8 +86,17 @@ namespace ShopManager
         public static void Record(SyncConfig cfg, Report r, double? counted)
         {
             string now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-            Db.Exec("INSERT INTO Shifts(Machine,StartAt,EndAt,Invoices,NetSales,CashExpected,CashCounted) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6)",
-                cfg.Machine, r.Start, now, r.Invoices, r.NetSales, r.ExpectedCash, counted.HasValue ? (object)counted.Value : null);
+            // نطاق أرقام كل جدول في هذه الوردية: (آخر رقم قبلها، آخر رقم الآن]
+            var s = State(cfg);
+            var parts = new List<string>();
+            foreach (string t in Tables)
+            {
+                long from = s.Marks != null && s.Marks.ContainsKey(t) ? s.Marks[t] : 0;
+                long to = Convert.ToInt64(Db.Scalar("SELECT IFNULL(MAX(Id),0) FROM " + t));
+                parts.Add(t + "=" + from + "-" + to);
+            }
+            Db.Exec("INSERT INTO Shifts(Machine,StartAt,EndAt,Invoices,NetSales,CashExpected,CashCounted,Marks) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7)",
+                cfg.Machine, r.Start, now, r.Invoices, r.NetSales, r.ExpectedCash, counted.HasValue ? (object)counted.Value : null, string.Join(";", parts));
         }
 
         // ---------------- الواجهة ----------------

@@ -32,7 +32,7 @@ namespace ShopManager
             lblToday.Font = new Font("Segoe UI", 13, FontStyle.Bold);
             lblToday.BackColor = Color.FromArgb(221, 235, 247);
 
-            panel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(40), WrapContents = true };
+            panel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(30), WrapContents = true };   // بلا AutoScroll: يُفسد مواضع النقر مع الاتجاه العربي
             // كل زر مربوط بصلاحية (null = متاح للجميع). الزر غير المسموح يُخفى ومفتاحه لا يعمل.
             AddBtn(panel, "فاتورة بيع  (F1)", Color.FromArgb(31, 78, 120), Perm.Sell, Keys.F1, () => Open(new InvoiceForm(true)));
             AddBtn(panel, "فاتورة مشتريات  (F2)", Color.FromArgb(55, 86, 35), Perm.Purchases, Keys.F2, () => Open(new InvoiceForm(false)));
@@ -49,6 +49,7 @@ namespace ShopManager
             AddBtn(panel, "أفضل الأصناف للفترة", Color.FromArgb(40, 120, 70), Perm.Profits, Keys.None, () => Open(new TopItemsForm()));
             AddBtn(panel, "التقارير والأرباح  (F6)", Color.FromArgb(0, 110, 110), Perm.Profits, Keys.F6, () => Open(new ReportsForm()));
             AddBtn(panel, "الإعدادات  (F7)", Color.FromArgb(80, 80, 80), Perm.Admin, Keys.F7, () => Open(new SettingsForm()));
+            AddBtn(panel, "سجل الورديات", Color.FromArgb(100, 40, 90), Perm.Profits, Keys.None, () => Open(new ShiftsLogForm()));
             bool sync = SyncConfig.Load().Enabled;
             AddBtn(panel, sync ? "إغلاق الوردية وتسليم" : "إغلاق الوردية", Color.FromArgb(150, 30, 60), null, Keys.None, () =>
             {
@@ -127,7 +128,7 @@ namespace ShopManager
         {
             var b = new Button
             {
-                Text = text, Width = 300, Height = 110, Margin = new Padding(16),
+                Text = text, Width = 250, Height = 100, Margin = new Padding(12),
                 Font = new Font("Segoe UI", 15, FontStyle.Bold),
                 BackColor = color, ForeColor = Color.White, FlatStyle = FlatStyle.Flat
             };
