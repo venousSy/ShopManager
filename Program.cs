@@ -13,6 +13,14 @@ namespace ShopManager
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += (s, e) => ReportError(e.Exception);
             AppDomain.CurrentDomain.UnhandledException += (s, e) => ReportError(e.ExceptionObject as Exception);
+            // للفحص: ShopManager.exe --receipt-png <رقم الفاتورة> <ملف.png> يرسم الإيصال صورةً ويخرج
+            string[] args = Environment.GetCommandLineArgs();
+            if (args.Length == 4 && args[1] == "--receipt-png")
+            {
+                Db.Init();
+                InvoicePrinter.SaveReceiptPng(int.Parse(args[2]), args[3]);
+                return;
+            }
             if (!System.IO.File.Exists(Db.DbPath)) Db.Init();   // جهاز جديد: ملف فارغ قبل الاستلام أو الرفع الأول
             if (!Shift.Startup()) return;                        // استلام ملف البيانات إن كانت المزامنة مفعّلة
             Db.Init();

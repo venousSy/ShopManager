@@ -10,11 +10,12 @@ namespace ShopManager
     /// <summary>طباعة فاتورة بيع أو مشتريات (معاينة ثم طباعة) على ورق A4.</summary>
     public static class InvoicePrinter
     {
-        class Total { public string Label, Value; public bool Bold; }
+        class Total { public string Label, Value; public bool Bold, Big; }   // Big = مربع أسود بارز في الإيصال (الصافي)
 
         class Model
         {
             public string Title;
+            public string Number = "", Date = "", Party = "", Cashier = "";   // رأس الإيصال الحراري
             public List<string> RightLines = new List<string>();   // يمين: رقم الفاتورة والجهة
             public List<string> LeftLines = new List<string>();    // يسار: التاريخ والعملة
             public string PriceHeader = "السعر";
@@ -36,17 +37,22 @@ namespace ShopManager
         static void BuildSale(int saleId, Action<Model> output)
         {
             DataTable h = Db.Query(
-                "SELECT s.Id, s.Date, s.Total, s.Discount, s.Net, s.Paid, s.Remaining, IFNULL(s.PrevBalance,0) AS PrevBal, IFNULL(s.CustomerId,0) AS CId, IFNULL(c.Name,'') AS CName " +
-                "FROM Sales s LEFT JOIN Customers c ON c.Id=s.CustomerId WHERE s.Id=@p0", saleId);
+                "SELECT s.Id, s.Date, s.Total, s.Discount, s.Net, s.Paid, s.Remaining, IFNULL(s.PrevBalance,0) AS PrevBal, IFNULL(s.CustomerId,0) AS CId, IFNULL(c.Name,'') AS CName, IFNULL(u.Name,'') AS UName " +
+                "FROM Sales s LEFT JOIN Customers c ON c.Id=s.CustomerId LEFT JOIN Users u ON u.Id=s.UserId WHERE s.Id=@p0", saleId);
             if (h.Rows.Count == 0) return;
             DataRow head = h.Rows[0];
             DataTable items = Db.Query("SELECT Name, Qty, UnitPrice FROM SaleItems WHERE SaleId=@p0 ORDER BY Id", saleId);
 
-            var m = new Model { Title = "فاتورة مبيعات", PriceHeader = "السعر" };
-            m.RightLines.Add("رقم الفاتورة: " + head["Id"]);
+            var m = new Model { Title = "فاتورة مبيع", PriceHeader = "السعر" };
             string cust = Convert.ToString(head["CName"]);
-            m.RightLines.Add("الزبون: " + (cust == "" ? "نقدي" : cust));
-            m.LeftLines.Add("التاريخ: " + DateText(head["Date"]));
+            m.Number = Convert.ToString(head["Id"]);
+            m.Date = DateText(head["Date"]);
+            m.Party = cust == "" ? "نقدي" : cust;
+            m.Cashier = Convert.ToString(head["UName"]);
+            m.RightLines.Add("رقم الفاتورة: " + head["Id"]);
+            m.RightLines.Add("الزبون: " + m.Party);
+            if (m.Cashier != "") m.RightLines.Add("البائع: " + m.Cashier);
+            m.LeftLines.Add("التاريخ: " + m.Date);
             foreach (DataRow r in items.Rows)
             {
                 double q = Db.D(r["Qty"]), p = Db.D(r["UnitPrice"]);
@@ -54,7 +60,7 @@ namespace ShopManager
             }
             m.Totals.Add(new Total { Label = "المجموع", Value = Db.D(head["Total"]).ToString("N0") });
             if (Db.D(head["Discount"]) > 0) m.Totals.Add(new Total { Label = "الخصم", Value = Db.D(head["Discount"]).ToString("N0") });
-            m.Totals.Add(new Total { Label = "الصافي", Value = Db.D(head["Net"]).ToString("N0") + " ل.س", Bold = true });
+            m.Totals.Add(new Total { Label = "الصافي", Value = Db.D(head["Net"]).ToString("N0") + " ل.س", Bold = true, Big = true });
             m.Totals.Add(new Total { Label = "المدفوع", Value = Db.D(head["Paid"]).ToString("N0") });
             if (Db.D(head["Remaining"]) > 0) m.Totals.Add(new Total { Label = "المتبقي (دين)", Value = Db.D(head["Remaining"]).ToString("N0"), Bold = true });
             if (Convert.ToInt32(head["CId"]) > 0 && Math.Abs(Db.D(head["PrevBal"])) > 0.0001)
@@ -83,13 +89,14 @@ namespace ShopManager
             if (last != null && !(last is DBNull)) m = SaleModel(Convert.ToInt32(last));
             else
             {
-                m = new Model { Title = "فاتورة مبيعات" };
+                m = new Model { Title = "فاتورة مبيع", Number = "0", Party = "نقدي", Date = DateTime.Now.ToString("yyyy-MM-dd HH:mm") };
                 m.RightLines.Add("رقم الفاتورة: 0");
                 m.RightLines.Add("الزبون: نقدي");
-                m.LeftLines.Add("التاريخ: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+                m.LeftLines.Add("التاريخ: " + m.Date);
                 m.Rows.Add(new[] { "صنف تجريبي باسم طويل نوعاً ما", "2", "1,500", "3,000" });
                 m.Rows.Add(new[] { "صنف ثانٍ", "1", "750", "750" });
-                m.Totals.Add(new Total { Label = "الصافي", Value = "3,750 ل.س", Bold = true });
+                m.Totals.Add(new Total { Label = "المجموع", Value = "3,750" });
+                m.Totals.Add(new Total { Label = "الصافي", Value = "3,750 ل.س", Bold = true, Big = true });
                 m.Totals.Add(new Total { Label = "المدفوع", Value = "3,750" });
             }
             PrintReceipt(m, true);
@@ -267,55 +274,146 @@ namespace ShopManager
         }
 
         /// <summary>يرسم الإيصال (أو يقيسه فقط إن كان draw=false) ويعيد الارتفاع الكلي.</summary>
+        /// <summary>
+        /// إيصال 80mm بترتيب إيصالات برامج المحاسبة: اسم المحل، شريط "فاتورة مبيع"، رقم وتاريخ وزبون وبائع،
+        /// جدول بأعمدة (الصنف | السعر | العدد | المجموع)، عدد الأصناف، الإجماليات مع الصافي في مربع بارز، ثم الشكر.
+        /// الوحدة 1/100 إنش. النص بلا تنعيم (أبيض/أسود صافٍ) لأن الطابعة الحرارية تطبع التنعيم الرمادي نقاطاً باهتة.
+        /// </summary>
         static float DrawReceipt(Graphics g, Model m, float L, float W, string shop, string phone, bool draw)
         {
-            using (var fShop = new Font("Arial", 14, FontStyle.Bold))
-            using (var fBold = new Font("Arial", 9, FontStyle.Bold))
-            using (var fNorm = new Font("Arial", 9))
-            using (var fSmall = new Font("Arial", 8))
-            using (var fTotal = new Font("Arial", 11, FontStyle.Bold))
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.SingleBitPerPixelGridFit;
+            const string F = "Tahoma";   // أوضح خط عربي على دقة الطابعات الحرارية المنخفضة
+            using (var fShop = new Font(F, 15, FontStyle.Bold))
+            using (var fBanner = new Font(F, 11, FontStyle.Bold))
+            using (var fInfo = new Font(F, 9))
+            using (var fInfoB = new Font(F, 9, FontStyle.Bold))
+            using (var fHead = new Font(F, 9, FontStyle.Bold))
+            using (var fItem = new Font(F, 9, FontStyle.Bold))
+            using (var fSmall = new Font(F, 8))
+            using (var fTotal = new Font(F, 10, FontStyle.Bold))
+            using (var fNet = new Font(F, 13, FontStyle.Bold))
             using (var ctr = new StringFormat { Alignment = StringAlignment.Center })
             using (var right = new StringFormat { FormatFlags = StringFormatFlags.DirectionRightToLeft, Alignment = StringAlignment.Near })
-            using (var left = new StringFormat { Alignment = StringAlignment.Near })
-            using (var dash = new Pen(Color.Black, 1) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash })
+            using (var num = new StringFormat { Alignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+            using (var numLeft = new StringFormat { Alignment = StringAlignment.Near, FormatFlags = StringFormatFlags.NoWrap })
+            using (var solid = new Pen(Color.Black, 1.5f))
+            using (var thin = new Pen(Color.Black, 0.6f) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dot })
             {
                 float y = 4;
-                Func<string, Font, StringFormat, float, float, float> text = (s, f, sf, x, w) =>
+                // يرسم نصاً في مستطيل عرضه w عند السطر الحالي ويعيد ارتفاعه (يلتفّ إن طال)
+                Func<string, Font, StringFormat, float, float, Brush, float> textAt = (s, f, sf, x, w, br) =>
                 {
-                    SizeF sz = g.MeasureString(s, f, (int)w, sf);
-                    if (draw) g.DrawString(s, f, Brushes.Black, new RectangleF(x, y, w, sz.Height + 1), sf);
+                    int wi = (int)Math.Max(1, w);   // نفس العرض للقياس والرسم كي يلتفّ النص بالطريقة نفسها
+                    SizeF sz = g.MeasureString(s, f, wi, sf);
+                    if (draw) g.DrawString(s, f, br, new RectangleF(x + (w - wi), y, wi, sz.Height + 1), sf);
                     return sz.Height;
                 };
-                Action line = () => { y += 3; if (draw) g.DrawLine(dash, L, y, L + W, y); y += 4; };
-                // سطر بعمودين: النص يميناً (60%) والقيمة يساراً (40%)
-                Action<string, string, Font> pair = (label, value, f) =>
+                Func<string, Font, StringFormat, float, float, float> text = (s, f, sf, x, w) => textAt(s, f, sf, x, w, Brushes.Black);
+                Action<Pen, float> rule = (p, gap) => { y += gap; if (draw) g.DrawLine(p, L, y, L + W, y); y += gap; };
+                // سطر بعمودين: العنوان يميناً والقيمة يساراً
+                Action<string, string, Font, Font> pair = (label, value, fl, fv) =>
                 {
-                    float h1 = text(label, f, right, L + W * 0.4f, W * 0.6f);
-                    float h2 = text(value, f, left, L, W * 0.4f);
+                    float h1 = text(label, fl, right, L + W * 0.42f, W * 0.58f);
+                    float h2 = text(value, fv, numLeft, L, W * 0.42f);
                     y += Math.Max(h1, h2);
                 };
-
-                if (!string.IsNullOrWhiteSpace(shop)) y += text(shop, fShop, ctr, L, W);
-                if (!string.IsNullOrWhiteSpace(phone)) y += text(phone, fSmall, ctr, L, W);
-                y += 2;
-                y += text(m.Title, fBold, ctr, L, W);
-                line();
-                foreach (string s in m.RightLines) y += text(s, fNorm, right, L, W);
-                foreach (string s in m.LeftLines) y += text(s, fNorm, right, L, W);
-                line();
-                pair("الصنف", "المجموع", fBold);
-                line();
-                foreach (string[] r in m.Rows)          // الصنف، الكمية، السعر، المجموع
+                // شريط أسود بنص أبيض في المنتصف (عنوان الفاتورة)
+                Action<string, Font> banner = (s, f) =>
                 {
-                    y += text(r[0], fBold, right, L, W);
-                    pair(r[1] + " × " + r[2], r[3], fNorm);   // الكمية × السعر
-                    y += 2;
+                    float h = g.MeasureString(s, f, (int)W, ctr).Height + 6;
+                    if (draw) { g.FillRectangle(Brushes.Black, L, y, W, h); }
+                    y += 3; textAt(s, f, ctr, L, W, Brushes.White); y += h - 3;
+                };
+
+                // ---- الرأس ----
+                if (!string.IsNullOrWhiteSpace(shop)) y += text(shop, fShop, ctr, L, W);
+                if (!string.IsNullOrWhiteSpace(phone)) y += text(phone, fInfo, ctr, L, W);
+                y += 4;
+                banner(m.Title, fBanner);
+                y += 4;
+                // رقم الفاتورة يميناً والتاريخ يساراً على سطر واحد
+                float hn = text("رقم: " + m.Number, fInfoB, right, L + W * 0.45f, W * 0.55f);
+                float hd = text(m.Date, fInfo, numLeft, L, W * 0.45f);
+                y += Math.Max(hn, hd);
+                y += text("الزبون: " + m.Party, fInfoB, right, L, W);
+                if (m.Cashier != "") y += text("البائع: " + m.Cashier, fInfo, right, L, W);
+
+                // ---- جدول الأصناف: الصنف | السعر | العدد | المجموع (من اليمين) ----
+                float cName = W * 0.43f, cPrice = W * 0.20f, cQty = W * 0.13f, cTot = W * 0.24f;
+                float xName = L + W - cName, xPrice = xName - cPrice, xQty = xPrice - cQty, xTot = L;
+                rule(solid, 3);
+                float hh = text("الصنف", fHead, right, xName, cName);
+                text("السعر", fHead, ctr, xPrice, cPrice);
+                text("العدد", fHead, ctr, xQty, cQty);
+                text("المجموع", fHead, ctr, xTot, cTot);
+                y += hh;
+                rule(solid, 2);
+                double qtySum = 0;
+                for (int i = 0; i < m.Rows.Count; i++)
+                {
+                    string[] r = m.Rows[i];               // الصنف، الكمية، السعر، المجموع
+                    double q; if (double.TryParse(r[1], out q)) qtySum += q;
+                    float h1 = text(r[0], fItem, right, xName, cName - 2);
+                    float h2 = text(r[2], fItem, num, xPrice, cPrice);
+                    text(r[1], fItem, num, xQty, cQty);
+                    text(r[3], fItem, num, xTot, cTot);
+                    y += Math.Max(h1, h2) + 1;
+                    if (i < m.Rows.Count - 1) rule(thin, 1.5f);
                 }
-                line();
-                foreach (var t in m.Totals) pair(t.Label, t.Value, t.Bold ? fTotal : fNorm);
-                line();
-                y += text("شكراً لتعاملكم معنا", fBold, ctr, L, W);
+                rule(solid, 3);
+                y += text("عدد الأصناف: " + m.Rows.Count + "     مجموع الكميات: " + qtySum.ToString("0.##"), fSmall, ctr, L, W);
+                y += 3;
+
+                // ---- الإجماليات ----
+                foreach (var t in m.Totals)
+                {
+                    if (t.Big)
+                    {
+                        y += 3;
+                        float h = g.MeasureString(t.Value, fNet).Height + 6;
+                        if (draw) g.FillRectangle(Brushes.Black, L, y, W, h);
+                        y += 3;
+                        textAt(t.Label, fNet, right, L + W * 0.45f, W * 0.55f - 4, Brushes.White);
+                        textAt(t.Value, fNet, numLeft, L + 4, W * 0.55f, Brushes.White);
+                        y += h - 3 + 3;
+                    }
+                    else pair(t.Label, t.Value, t.Bold ? fTotal : fInfo, t.Bold ? fTotal : fInfoB);
+                }
+
+                // ---- التذييل ----
+                rule(solid, 4);
+                y += text("شكراً لتعاملكم معنا", fInfoB, ctr, L, W);
                 return y + 30;   // فراغ قبل القصّ
+            }
+        }
+
+        /// <summary>للفحص: يرسم إيصال فاتورة بيع (أو الإيصال التجريبي إن كان saleId=0) في صورة PNG بدقة طابعة 203 نقطة/إنش.</summary>
+        public static void SaveReceiptPng(int saleId, string file)
+        {
+            Model m = null;
+            if (saleId > 0) m = SaleModel(saleId);
+            if (m == null)
+            {
+                m = new Model { Title = "فاتورة مبيع", Number = "0", Party = "نقدي", Date = DateTime.Now.ToString("yyyy-MM-dd HH:mm") };
+                m.Rows.Add(new[] { "صنف تجريبي باسم طويل نوعاً ما", "2", "1,500", "3,000" });
+                m.Rows.Add(new[] { "صنف ثانٍ", "1", "750", "750" });
+                m.Totals.Add(new Total { Label = "الصافي", Value = "3,750 ل.س", Bold = true, Big = true });
+            }
+            string shop = Db.Get("shop_name"), phone = Db.Get("shop_phone");
+            const float dpi = 203f;
+            float h;
+            using (var b0 = new Bitmap(1, 1))
+            using (var g0 = Graphics.FromImage(b0)) { g0.PageUnit = GraphicsUnit.Document; g0.PageScale = 3f; h = DrawReceipt(g0, m, 2, ReceiptMaxWidth, shop, phone, false); }
+            using (var bmp = new Bitmap((int)(PaperWidth80 * dpi / 100), (int)((h + 10) * dpi / 100)))
+            {
+                bmp.SetResolution(dpi, dpi);
+                using (var g = Graphics.FromImage(bmp))
+                {
+                    g.Clear(Color.White);
+                    g.PageUnit = GraphicsUnit.Document; g.PageScale = 3f;   // 1/100 إنش مثل الطابعة
+                    DrawReceipt(g, m, 2, ReceiptMaxWidth, shop, phone, true);
+                }
+                bmp.Save(file, System.Drawing.Imaging.ImageFormat.Png);
             }
         }
 
