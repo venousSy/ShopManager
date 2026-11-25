@@ -23,7 +23,7 @@ namespace ShopManager
         {
             UI.Rtl(this);
             KeyPreview = true;
-            KeyDown += (a, b) => { if (b.Control && b.KeyCode == Keys.Z) { b.Handled = true; DoUndo(); } };
+            KeyDown += (a, b) => { if (b.Control && b.KeyCode == Keys.Z && Session.Can(Perm.EditInvoices)) { b.Handled = true; DoUndo(); } };
             Text = "الديون والمدفوعات";
             Width = 1050; Height = 700;
             StartPosition = FormStartPosition.CenterParent;
@@ -60,7 +60,8 @@ namespace ShopManager
                 bu.Click += (a, b) => UnfreezeSelected();
                 bar.Controls.Add(bu);
             }
-            bar.Controls.Add(UndoStack.MakeButton(DoUndo));
+            // حذف دفعة مسجّلة (بالتراجع) يحتاج صلاحية "تعديل وإلغاء الفواتير والتراجع عنها"
+            if (Session.Can(Perm.EditInvoices)) bar.Controls.Add(UndoStack.MakeButton(DoUndo));
             lbl.AutoSize = true;
             lbl.Margin = new Padding(20, 14, 4, 0);
             lbl.Font = new Font("Segoe UI", 12, FontStyle.Bold);

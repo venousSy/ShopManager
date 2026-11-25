@@ -21,15 +21,15 @@ namespace ShopManager
 
         const string SalesSql =
             "SELECT s.Id AS \"رقم الفاتورة\", substr(s.Date,1,16) AS \"التاريخ\", IFNULL(c.Name,'نقدي') AS \"الزبون\", IFNULL(s.PrevBalance,0) AS \"الرصيد السابق\", " +
-            "s.Total AS \"المجموع\", s.Discount AS \"الخصم\", s.Net AS \"الصافي\", s.Paid AS \"المدفوع\", s.Remaining AS \"المتبقي\" " +
-            "FROM Sales s LEFT JOIN Customers c ON c.Id=s.CustomerId " +
+            "s.Total AS \"المجموع\", s.Discount AS \"الخصم\", s.Net AS \"الصافي\", s.Paid AS \"المدفوع\", s.Remaining AS \"المتبقي\", IFNULL(u.Name,'') AS \"المستخدم\" " +
+            "FROM Sales s LEFT JOIN Customers c ON c.Id=s.CustomerId LEFT JOIN Users u ON u.Id=s.UserId " +
             "WHERE substr(s.Date,1,10) BETWEEN @p0 AND @p1 AND (CAST(s.Id AS TEXT) LIKE @p2 OR IFNULL(c.Name,'نقدي') LIKE @p2) " +
             "ORDER BY s.Id DESC";
 
         const string PurchSql =
             "SELECT p.Id AS \"رقم\", substr(p.Date,1,16) AS \"التاريخ\", IFNULL(s.Name,'-') AS \"المورد\", IFNULL(p.InvoiceNo,'') AS \"رقم فاتورة المورد\", " +
-            "IFNULL(p.Currency,'SYP') AS \"العملة\", p.Total AS \"المجموع\", p.Discount AS \"الخصم\", p.Net AS \"الصافي\", p.Paid AS \"المدفوع\", p.Remaining AS \"المتبقي\" " +
-            "FROM Purchases p LEFT JOIN Suppliers s ON s.Id=p.SupplierId " +
+            "IFNULL(p.Currency,'SYP') AS \"العملة\", p.Total AS \"المجموع\", p.Discount AS \"الخصم\", p.Net AS \"الصافي\", p.Paid AS \"المدفوع\", p.Remaining AS \"المتبقي\", IFNULL(u.Name,'') AS \"المستخدم\" " +
+            "FROM Purchases p LEFT JOIN Suppliers s ON s.Id=p.SupplierId LEFT JOIN Users u ON u.Id=p.UserId " +
             "WHERE substr(p.Date,1,10) BETWEEN @p0 AND @p1 AND (CAST(p.Id AS TEXT) LIKE @p2 OR IFNULL(s.Name,'') LIKE @p2 OR IFNULL(p.InvoiceNo,'') LIKE @p2) " +
             "ORDER BY p.Id DESC";
 
@@ -38,7 +38,7 @@ namespace ShopManager
             sales = isSales;
             UI.Rtl(this);
             KeyPreview = true;
-            KeyDown += (a, b) => { if (b.Control && b.KeyCode == Keys.Z && !(ActiveControl is TextBox)) { b.Handled = true; DoUndo(); } };
+            KeyDown += (a, b) => { if (b.Control && b.KeyCode == Keys.Z && !(ActiveControl is TextBox) && Session.Can(Perm.EditInvoices)) { b.Handled = true; DoUndo(); } };
             Text = sales ? "سجل فواتير المبيعات" : "سجل فواتير المشتريات";
             WindowState = FormWindowState.Maximized;
 
@@ -63,11 +63,13 @@ namespace ShopManager
             bar.Controls.Add(UI.Lbl("بحث:")); bar.Controls.Add(txtSearch);
             bar.Controls.Add(Btn("عرض", (a, b) => Reload()));
             bar.Controls.Add(Btn("تفاصيل الفاتورة", (a, b) => Details()));
-            bar.Controls.Add(Btn("فتح الفاتورة للتعديل", (a, b) => EditCurrent()));
+            bool canEdit = Session.Can(Perm.EditInvoices);
+            bool canReturn = Session.Can(sales ? Perm.SaleReturns : Perm.PurchaseReturns);
+            if (canEdit) bar.Controls.Add(Btn("فتح الفاتورة للتعديل", (a, b) => EditCurrent()));
             bar.Controls.Add(Btn("طباعة الفاتورة", (a, b) => PrintCurrent()));
-            bar.Controls.Add(Btn("مرتجع من الفاتورة", (a, b) => OpenReturn()));
-            bar.Controls.Add(Btn("إلغاء الفاتورة", (a, b) => CancelInvoice()));
-            bar.Controls.Add(UndoStack.MakeButton(DoUndo));
+            if (canReturn) bar.Controls.Add(Btn("مرتجع من الفاتورة", (a, b) => OpenReturn()));
+            if (canEdit) bar.Controls.Add(Btn("إلغاء الفاتورة", (a, b) => CancelInvoice()));
+            if (canEdit) bar.Controls.Add(UndoStack.MakeButton(DoUndo));
 
             var bottom = new Panel { Dock = DockStyle.Bottom, Height = 46 };
             lblTotal.Dock = DockStyle.Fill;

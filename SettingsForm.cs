@@ -25,7 +25,7 @@ namespace ShopManager
         {
             UI.Rtl(this);
             Text = "الإعدادات";
-            Width = 680; Height = 920;
+            Width = 680; Height = 970;
             KeyPreview = true;
             KeyDown += (a, b) => { if (b.Control && b.KeyCode == Keys.Z && !(ActiveControl is TextBox)) { b.Handled = true; DoUndo(); } };
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -73,9 +73,12 @@ namespace ShopManager
             btnBackup.Click += (a, b) => Backup();
             var btnTestReceipt = new Button { Text = "معاينة إيصال تجريبي (80mm)", Dock = DockStyle.Top, Height = 44 };
             btnTestReceipt.Click += (a, b) => InvoicePrinter.PreviewReceipt();
+            var btnUsers = new Button { Text = "المستخدمون والصلاحيات", Dock = DockStyle.Top, Height = 44 };
+            btnUsers.Click += (a, b) => { using (var f = new UsersForm()) f.ShowDialog(this); };
             var info = new Label { Dock = DockStyle.Top, Height = 60, Padding = new Padding(20, 10, 20, 0), Text = "ملف البيانات: " + Db.DbPath };
 
             Controls.Add(info);
+            Controls.Add(btnUsers);
             Controls.Add(btnTestReceipt);
             Controls.Add(btnBackup);
             Controls.Add(btnUndo);

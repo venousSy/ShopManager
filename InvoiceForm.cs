@@ -185,7 +185,7 @@ namespace ShopManager
             var btnUndo = new Button { Text = "تراجع (Ctrl+Z)", Height = 44, Width = 150, Font = new Font("Segoe UI", 12), BackColor = Color.FromArgb(255, 235, 200), Margin = new Padding(4, 2, 4, 0) };
             btnUndo.Click += (a, b) => DoUndo();
             bottom.Controls.Add(btnUndo);
-            var btnReopen = new Button { Text = "إعادة فتح الفاتورة الأخيرة", Height = 44, Width = 240, Font = new Font("Segoe UI", 12), BackColor = Color.FromArgb(220, 240, 255), Margin = new Padding(4, 2, 4, 0), Visible = editId == 0 };
+            var btnReopen = new Button { Text = "إعادة فتح الفاتورة الأخيرة", Height = 44, Width = 240, Font = new Font("Segoe UI", 12), BackColor = Color.FromArgb(220, 240, 255), Margin = new Padding(4, 2, 4, 0), Visible = editId == 0 && Session.Can(Perm.EditInvoices) };
             btnReopen.Click += (a, b) => ReopenLast();
             bottom.Controls.Add(btnReopen);
             var btnNew = new Button { Text = "جديد (F5)", Height = 44, Width = 110, Font = new Font("Segoe UI", 12), Margin = new Padding(4, 2, 4, 0) };
@@ -196,6 +196,14 @@ namespace ShopManager
             lblStatus.Height = 28;
             lblStatus.TextAlign = ContentAlignment.MiddleRight;
             lblStatus.Padding = new Padding(8, 0, 8, 0);
+
+            // بلا صلاحية الخصم: لا خصم ولا تغيير لسعر البيع (تغيير السعر خصم أيضاً). سعر الشراء يبقى قابلاً للكتابة.
+            if (sale && !Session.Can(Perm.Discount))
+            {
+                txtDiscount.ReadOnly = true;
+                txtDiscount.BackColor = SystemColors.Control;
+                grid.Columns["Price"].ReadOnly = true;
+            }
 
             Controls.Add(grid);
             Controls.Add(bottom);
@@ -656,7 +664,9 @@ namespace ShopManager
             ClearForm(false);
             LoadParties();
             long extraPayId = lastExtraPayId;
-            undo.Push("حفظ الفاتورة رقم " + id, () =>
+            // بلا صلاحية "تعديل وإلغاء الفواتير": الفاتورة المحفوظة نهائية، ولا رجوع لمسودّاتها
+            if (!Session.Can(Perm.EditInvoices)) undo.Clear();
+            else undo.Push("حفظ الفاتورة رقم " + id, () =>
             {
                 Db.CancelInvoice(wasSale, id);
                 if (extraPayId > 0) Db.Exec("DELETE FROM Payments WHERE Id=@p0", extraPayId);

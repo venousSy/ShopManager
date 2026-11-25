@@ -381,6 +381,7 @@ namespace ShopManager
                 "CREATE TABLE IF NOT EXISTS PurchaseReturnItems(Id INTEGER PRIMARY KEY AUTOINCREMENT, ReturnId INTEGER, ProductId INTEGER, Qty REAL, UnitCost REAL)",
                 "CREATE TABLE IF NOT EXISTS Payments(Id INTEGER PRIMARY KEY AUTOINCREMENT, Date TEXT, PartyType TEXT, PartyId INTEGER, Amount REAL, Note TEXT, Currency TEXT DEFAULT 'SYP', Rate REAL DEFAULT 1)",
                 "CREATE TABLE IF NOT EXISTS Shifts(Id INTEGER PRIMARY KEY AUTOINCREMENT, Machine TEXT, StartAt TEXT, EndAt TEXT, Invoices INTEGER, NetSales REAL, CashExpected REAL, CashCounted REAL)",
+                "CREATE TABLE IF NOT EXISTS Users(Id INTEGER PRIMARY KEY AUTOINCREMENT, Name TEXT NOT NULL UNIQUE, PinHash TEXT, PinSalt TEXT, Perms TEXT DEFAULT '', Active INTEGER DEFAULT 1)",
                 // فهارس لتسريع حساب الأرصدة والفواتير مع كبر البيانات
                 "CREATE INDEX IF NOT EXISTS ix_sales_customer ON Sales(CustomerId)",
                 "CREATE INDEX IF NOT EXISTS ix_sales_date ON Sales(Date)",
@@ -431,6 +432,18 @@ namespace ShopManager
             if (!hasMargin) Exec("ALTER TABLE Products ADD COLUMN Margin REAL DEFAULT -1");
             if (!hasCur) Exec("ALTER TABLE Payments ADD COLUMN Currency TEXT DEFAULT 'SYP'");
             if (!hasRate) Exec("ALTER TABLE Payments ADD COLUMN Rate REAL DEFAULT 1");
+
+            // من قام بالعملية: عمود UserId يُملأ تلقائياً بالمستخدم الحالي (Settings.session_user) عند الإضافة.
+            // الشرط "NEW.UserId IS NULL" يحفظ المستخدم الأصلي عند إعادة إدراج صف بالتراجع.
+            foreach (var t in new[] { "Sales", "SaleReturns", "Payments", "Purchases", "PurchaseReturns", "Expenses", "Shifts" })
+            {
+                bool hasUser = false;
+                foreach (DataRow r in Query("PRAGMA table_info(" + t + ")").Rows)
+                    if (Convert.ToString(r["name"]) == "UserId") hasUser = true;
+                if (!hasUser) Exec("ALTER TABLE " + t + " ADD COLUMN UserId INTEGER");
+                Exec("CREATE TRIGGER IF NOT EXISTS tr_" + t + "_user AFTER INSERT ON " + t + " WHEN NEW.UserId IS NULL BEGIN " +
+                     "UPDATE " + t + " SET UserId=(SELECT CAST(V AS INTEGER) FROM Settings WHERE K='session_user') WHERE Id=NEW.Id; END");
+            }
 
             Exec("INSERT OR IGNORE INTO Settings(K,V) VALUES('shop_name','اسم المحل')");
             Exec("INSERT OR IGNORE INTO Settings(K,V) VALUES('shop_phone','')");

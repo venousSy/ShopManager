@@ -192,7 +192,7 @@ namespace ShopManager
                 var lbl = new Label
                 {
                     Dock = DockStyle.Top, Height = 330, Padding = new Padding(16),
-                    Text = "الجهاز: " + cfg.Machine + "\nبداية الوردية: " + r.Start + "\n\n" +
+                    Text = "الجهاز: " + cfg.Machine + (Session.User != null ? "   |   المستخدم: " + Session.User.Name : "") + "\nبداية الوردية: " + r.Start + "\n\n" +
                            "فواتير البيع: " + r.Invoices + "   |   صافي المبيعات: " + n(r.NetSales) + " ل.س\n\n" +
                            "+ المقبوض من المبيعات: " + n(r.SalesPaid) + "\n" +
                            "+ دفعات الزبائن: " + n(r.CustomerPayments) + "\n" +

@@ -32,27 +32,38 @@ namespace ShopManager
             lblToday.Font = new Font("Segoe UI", 13, FontStyle.Bold);
             lblToday.BackColor = Color.FromArgb(221, 235, 247);
 
-            var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(40), WrapContents = true };
-            AddBtn(panel, "فاتورة بيع  (F1)", Color.FromArgb(31, 78, 120), () => Open(new InvoiceForm(true)));
-            AddBtn(panel, "فاتورة مشتريات  (F2)", Color.FromArgb(55, 86, 35), () => Open(new InvoiceForm(false)));
-            AddBtn(panel, "الأصناف والمخزون  (F3)", Color.FromArgb(127, 96, 0), () => Open(new ProductsForm()));
-            AddBtn(panel, "المصاريف  (F4)", Color.FromArgb(150, 60, 30), () => Open(new ExpensesForm()));
-            AddBtn(panel, "الديون والمدفوعات  (F5)", Color.FromArgb(90, 50, 120), () => Open(new DebtsForm()));
-            AddBtn(panel, "الزبائن  (F8)", Color.FromArgb(0, 90, 160), () => Open(new PartiesForm(true)));
-            AddBtn(panel, "الموردون  (F9)", Color.FromArgb(120, 80, 20), () => Open(new PartiesForm(false)));
-            AddBtn(panel, "سجل فواتير المبيعات", Color.FromArgb(20, 80, 130), () => Open(new InvoicesLogForm(true)));
-            AddBtn(panel, "سجل فواتير المشتريات", Color.FromArgb(70, 100, 40), () => Open(new InvoicesLogForm(false)));
-            AddBtn(panel, "مرتجعات المبيعات", Color.FromArgb(150, 90, 30), () => Open(new ReturnsForm(true, 0)));
-            AddBtn(panel, "مرتجعات المشتريات", Color.FromArgb(110, 90, 30), () => Open(new ReturnsForm(false, 0)));
-            AddBtn(panel, "النواقص", Color.FromArgb(160, 40, 40), () => Open(new ShortagesForm()));
-            AddBtn(panel, "أفضل الأصناف للفترة", Color.FromArgb(40, 120, 70), () => Open(new TopItemsForm()));
-            AddBtn(panel, "التقارير والأرباح  (F6)", Color.FromArgb(0, 110, 110), () => Open(new ReportsForm()));
-            AddBtn(panel, "الإعدادات  (F7)", Color.FromArgb(80, 80, 80), () => Open(new SettingsForm()));
+            panel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(40), WrapContents = true };
+            // كل زر مربوط بصلاحية (null = متاح للجميع). الزر غير المسموح يُخفى ومفتاحه لا يعمل.
+            AddBtn(panel, "فاتورة بيع  (F1)", Color.FromArgb(31, 78, 120), Perm.Sell, Keys.F1, () => Open(new InvoiceForm(true)));
+            AddBtn(panel, "فاتورة مشتريات  (F2)", Color.FromArgb(55, 86, 35), Perm.Purchases, Keys.F2, () => Open(new InvoiceForm(false)));
+            AddBtn(panel, "الأصناف والمخزون  (F3)", Color.FromArgb(127, 96, 0), Perm.Products, Keys.F3, () => Open(new ProductsForm()));
+            AddBtn(panel, "المصاريف  (F4)", Color.FromArgb(150, 60, 30), Perm.Expenses, Keys.F4, () => Open(new ExpensesForm()));
+            AddBtn(panel, "الديون والمدفوعات  (F5)", Color.FromArgb(90, 50, 120), Perm.Payments, Keys.F5, () => Open(new DebtsForm()));
+            AddBtn(panel, "الزبائن  (F8)", Color.FromArgb(0, 90, 160), Perm.Parties, Keys.F8, () => Open(new PartiesForm(true)));
+            AddBtn(panel, "الموردون  (F9)", Color.FromArgb(120, 80, 20), Perm.Parties, Keys.F9, () => Open(new PartiesForm(false)));
+            AddBtn(panel, "سجل فواتير المبيعات", Color.FromArgb(20, 80, 130), Perm.Sell, Keys.None, () => Open(new InvoicesLogForm(true)));
+            AddBtn(panel, "سجل فواتير المشتريات", Color.FromArgb(70, 100, 40), Perm.Purchases, Keys.None, () => Open(new InvoicesLogForm(false)));
+            AddBtn(panel, "مرتجعات المبيعات", Color.FromArgb(150, 90, 30), Perm.SaleReturns, Keys.None, () => Open(new ReturnsForm(true, 0)));
+            AddBtn(panel, "مرتجعات المشتريات", Color.FromArgb(110, 90, 30), Perm.PurchaseReturns, Keys.None, () => Open(new ReturnsForm(false, 0)));
+            AddBtn(panel, "النواقص", Color.FromArgb(160, 40, 40), null, Keys.None, () => Open(new ShortagesForm()));
+            AddBtn(panel, "أفضل الأصناف للفترة", Color.FromArgb(40, 120, 70), Perm.Profits, Keys.None, () => Open(new TopItemsForm()));
+            AddBtn(panel, "التقارير والأرباح  (F6)", Color.FromArgb(0, 110, 110), Perm.Profits, Keys.F6, () => Open(new ReportsForm()));
+            AddBtn(panel, "الإعدادات  (F7)", Color.FromArgb(80, 80, 80), Perm.Admin, Keys.F7, () => Open(new SettingsForm()));
             bool sync = SyncConfig.Load().Enabled;
-            AddBtn(panel, sync ? "إغلاق الوردية وتسليم" : "إغلاق الوردية", Color.FromArgb(150, 30, 60), () =>
+            AddBtn(panel, sync ? "إغلاق الوردية وتسليم" : "إغلاق الوردية", Color.FromArgb(150, 30, 60), null, Keys.None, () =>
             {
                 if (Shift.Close(this) && sync) { closingAfterHandover = true; Close(); }
             });
+            // زر تبديل المستخدم في الشريط العلوي (يبقى ظاهراً مهما كان عدد الأزرار)
+            var btnSwitch = new Button
+            {
+                Text = "تبديل المستخدم", Dock = DockStyle.Left, Width = 200,
+                Font = new Font("Segoe UI", 12, FontStyle.Bold), FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(45, 100, 150), ForeColor = Color.White
+            };
+            btnSwitch.Click += (a, e) => SwitchUser();
+            lblTitle.Controls.Add(btnSwitch);
+            ApplyPermissions();
             // عند إغلاق البرنامج والجهاز ما زال مستلماً: تذكير بالتسليم كي لا ينتظر الجهاز الآخر
             FormClosing += (a, e) =>
             {
@@ -70,18 +81,13 @@ namespace ShopManager
 
             KeyDown += (a, b) =>
             {
-                switch (b.KeyCode)
-                {
-                    case Keys.F1: Run(() => Open(new InvoiceForm(true))); break;
-                    case Keys.F2: Run(() => Open(new InvoiceForm(false))); break;
-                    case Keys.F3: Run(() => Open(new ProductsForm())); break;
-                    case Keys.F4: Run(() => Open(new ExpensesForm())); break;
-                    case Keys.F5: Run(() => Open(new DebtsForm())); break;
-                    case Keys.F6: Run(() => Open(new ReportsForm())); break;
-                    case Keys.F7: Run(() => Open(new SettingsForm())); break;
-                    case Keys.F8: Run(() => Open(new PartiesForm(true))); break;
-                    case Keys.F9: Run(() => Open(new PartiesForm(false))); break;
-                }
+                foreach (var e in entries)
+                    if (e.Key != Keys.None && e.Key == b.KeyCode)
+                    {
+                        b.Handled = true;
+                        if (e.Perm == null || Session.Can(e.Perm)) Run(e.Act);
+                        break;
+                    }
             };
             RefreshHeader();
             Shown += (a, b) => CheckStaleDebts();
@@ -113,7 +119,11 @@ namespace ShopManager
             RefreshHeader();
         }
 
-        void AddBtn(FlowLayoutPanel p, string text, Color color, Action act)
+        sealed class Entry { public Button Btn; public string Perm; public Keys Key; public Action Act; }
+        readonly System.Collections.Generic.List<Entry> entries = new System.Collections.Generic.List<Entry>();
+        readonly FlowLayoutPanel panel;
+
+        void AddBtn(FlowLayoutPanel p, string text, Color color, string perm, Keys key, Action act)
         {
             var b = new Button
             {
@@ -123,6 +133,30 @@ namespace ShopManager
             };
             b.Click += (a, e) => Run(act);
             p.Controls.Add(b);
+            entries.Add(new Entry { Btn = b, Perm = perm, Key = key, Act = act });
+        }
+
+        /// <summary>يُظهر فقط أزرار الصفحات المسموحة للمستخدم الحالي.</summary>
+        void ApplyPermissions()
+        {
+            foreach (var e in entries) e.Btn.Visible = e.Perm == null || Session.Can(e.Perm);
+        }
+
+        /// <summary>يغلق كل الصفحات المفتوحة ويعرض شاشة الدخول لمستخدم آخر.</summary>
+        void SwitchUser()
+        {
+            foreach (Form f in new System.Collections.Generic.List<Form>(Application.OpenForms.Cast<Form>()))
+            {
+                if (f == this) continue;
+                f.Close();
+                if (!f.IsDisposed && f.Visible) { UI.Warn(this, "أغلق الصفحات المفتوحة أولاً (يوجد عمل لم يُحفظ)."); return; }
+            }
+            Hide();
+            bool ok = LoginForm.Run();
+            if (!ok) { closingAfterHandover = false; Close(); return; }
+            Show();
+            ApplyPermissions();
+            RefreshHeader();
         }
 
         /// <summary>يفتح الصفحة في نافذة مستقلة (يمكن تصغيرها وفتح صفحات أخرى معها).</summary>
@@ -145,8 +179,10 @@ namespace ShopManager
             long count = Convert.ToInt64(Db.Scalar("SELECT COUNT(*) FROM Sales WHERE substr(Date,1,10)=@p0", today));
             double cogs = Db.D(Db.Scalar("SELECT IFNULL(SUM(si.Qty*si.UnitCost),0) FROM SaleItems si JOIN Sales s ON s.Id=si.SaleId WHERE substr(s.Date,1,10)=@p0", today));
             long overLimit = Convert.ToInt64(Db.Scalar("SELECT COUNT(*) FROM (" + Sql.CustomerBaseSql() + ") WHERE Bal>" + Db.DebtLimit.ToString(CultureInfo.InvariantCulture)));
-            lblToday.Text = (overLimit > 0 ? "⚠ ديون فوق الحد: " + overLimit + "   |   " : "") + "اليوم:  مبيعات " + sales.ToString("N0") + " ل.س   |   فواتير " + count +
-                            "   |   ربح تقريبي " + (sales - cogs).ToString("N0") + " ل.س   |   سعر الصرف " + Db.Rate.ToString("0.##", CultureInfo.InvariantCulture);
+            lblToday.Text = (Session.User != null ? "المستخدم: " + Session.User.Name + "   |   " : "") +
+                            (overLimit > 0 ? "⚠ ديون فوق الحد: " + overLimit + "   |   " : "") + "اليوم:  مبيعات " + sales.ToString("N0") + " ل.س   |   فواتير " + count +
+                            (Session.Can(Perm.Profits) ? "   |   ربح تقريبي " + (sales - cogs).ToString("N0") + " ل.س" : "") +
+                            "   |   سعر الصرف " + Db.Rate.ToString("0.##", CultureInfo.InvariantCulture);
         }
     }
 }

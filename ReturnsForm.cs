@@ -34,7 +34,7 @@ namespace ShopManager
             Text = sale ? "مرتجعات المبيعات" : "مرتجعات المشتريات";
             WindowState = FormWindowState.Maximized;
             KeyPreview = true;
-            KeyDown += (a, b) => { if (b.Control && b.KeyCode == Keys.Z && !grid.IsCurrentCellInEditMode && !(ActiveControl is TextBox)) { b.Handled = true; DoUndo(); } };
+            KeyDown += (a, b) => { if (b.Control && b.KeyCode == Keys.Z && !grid.IsCurrentCellInEditMode && !(ActiveControl is TextBox) && Session.Can(Perm.EditInvoices)) { b.Handled = true; DoUndo(); } };
 
             var tabs = new TabControl { Dock = DockStyle.Fill };
             var pNew = new TabPage("مرتجع جديد");
@@ -65,7 +65,8 @@ namespace ShopManager
             top.Controls.Add(UI.Lbl(sale ? "رقم فاتورة البيع:" : "رقم فاتورة المشتريات (الداخلي):"));
             top.Controls.Add(txtInv);
             top.Controls.Add(btnLoad);
-            top.Controls.Add(UndoStack.MakeButton(DoUndo));
+            bool canEdit = Session.Can(Perm.EditInvoices);   // إلغاء المرتجعات والتراجع عنها
+            if (canEdit) top.Controls.Add(UndoStack.MakeButton(DoUndo));
 
             lblHead.Dock = DockStyle.Top; lblHead.Height = 54; lblHead.Padding = new Padding(10, 12, 0, 0);
             lblHead.Font = new Font("Segoe UI", 12, FontStyle.Bold);
@@ -102,8 +103,8 @@ namespace ShopManager
             var btnDet = new Button { Text = "تفاصيل المرتجع", AutoSize = true, Margin = new Padding(6, 8, 4, 0) };
             btnDet.Click += (a, b) => ShowReturnDetails();
             lbar.Controls.Add(btnDet);
-            lbar.Controls.Add(btnCancel);
-            lbar.Controls.Add(UndoStack.MakeButton(DoUndo));
+            if (canEdit) lbar.Controls.Add(btnCancel);
+            if (canEdit) lbar.Controls.Add(UndoStack.MakeButton(DoUndo));
             logGrid.CellDoubleClick += (a, b) => { if (b.RowIndex >= 0) ShowReturnDetails(); };
             pLog.Controls.Add(logGrid);
             pLog.Controls.Add(lbar);

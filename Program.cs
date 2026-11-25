@@ -17,6 +17,7 @@ namespace ShopManager
             if (!Shift.Startup()) return;                        // استلام ملف البيانات إن كانت المزامنة مفعّلة
             Db.Init();
             Shift.EnsureStarted(SyncConfig.Load());
+            if (!LoginForm.Run()) return;                        // اسم المستخدم + رمز من 4 أرقام
             Application.Run(new MainForm());
         }
 
