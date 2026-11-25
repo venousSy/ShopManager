@@ -34,6 +34,15 @@ namespace ShopManager
             BuildSale(saleId, m => { if (ReceiptMode) PrintReceipt(m, false); else Print(m); });
         }
 
+        /// <summary>طباعة إيصال 80mm فورية لكل فاتورة بيع تُحفظ (مفعّلة افتراضياً، تُطفأ من الإعدادات).</summary>
+        public static bool AutoPrint { get { return Db.Get("auto_print", "1") == "1"; } }
+
+        /// <summary>يطبع إيصال 80mm مباشرة على طابعة الإيصالات، بلا معاينة وبغض النظر عن نوع الطباعة المختار.</summary>
+        public static void PrintSaleReceipt(int saleId)
+        {
+            BuildSale(saleId, m => PrintReceipt(m, false));
+        }
+
         static void BuildSale(int saleId, Action<Model> output)
         {
             DataTable h = Db.Query(

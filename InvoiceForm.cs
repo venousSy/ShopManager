@@ -650,6 +650,8 @@ namespace ShopManager
         {
             if (!Save()) return;
             int id = lastId;
+            // الطباعة الفورية: كل فاتورة بيع تُحفظ تُطبع إيصال 80mm مباشرة
+            if (sale && InvoicePrinter.AutoPrint) { InvoicePrinter.PrintSaleReceipt(id); print = false; }
             if (editId > 0)
             {
                 if (print && sale) InvoicePrinter.ShowSale(id);

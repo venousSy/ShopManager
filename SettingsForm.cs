@@ -16,6 +16,7 @@ namespace ShopManager
         readonly TextBox txtFreeze = new TextBox();
         readonly ComboBox cmbPrintMode = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         readonly ComboBox cmbPrinter = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+        readonly CheckBox chkAutoPrint = new CheckBox { Text = "اطبع إيصال 80mm فوراً عند حفظ أي فاتورة بيع", AutoSize = true };
         const string DefaultPrinterLabel = "(الطابعة الافتراضية في ويندوز)";
         readonly TextBox txtSyncFolder = new TextBox();
         readonly TextBox txtMachine = new TextBox();
@@ -25,7 +26,7 @@ namespace ShopManager
         {
             UI.Rtl(this);
             Text = "الإعدادات";
-            Width = 680; Height = 970;
+            Width = 680; Height = 1010;
             KeyPreview = true;
             KeyDown += (a, b) => { if (b.Control && b.KeyCode == Keys.Z && !(ActiveControl is TextBox)) { b.Handled = true; DoUndo(); } };
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -48,6 +49,7 @@ namespace ShopManager
             try { foreach (string p in System.Drawing.Printing.PrinterSettings.InstalledPrinters) cmbPrinter.Items.Add(p); } catch { }
             Row(tl, "طباعة فاتورة البيع", cmbPrintMode);
             Row(tl, "طابعة الإيصالات", cmbPrinter);
+            Row(tl, "طباعة فورية", chkAutoPrint);
 
             // المزامنة: إعدادات هذا الجهاز فقط (ملف sync_config.json بجانب البرنامج)
             var syncRow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false, Margin = new Padding(0) };
@@ -108,6 +110,7 @@ namespace ShopManager
             int pi = pr == "" ? 0 : cmbPrinter.Items.IndexOf(pr);
             if (pi < 0) { cmbPrinter.Items.Add(pr); pi = cmbPrinter.Items.Count - 1; }   // طابعة محفوظة غير موصولة الآن
             cmbPrinter.SelectedIndex = pi;
+            chkAutoPrint.Checked = InvoicePrinter.AutoPrint;
             var cfg = SyncConfig.Load();
             txtSyncFolder.Text = cfg.Folder;
             txtMachine.Text = cfg.Machine;
@@ -139,6 +142,7 @@ namespace ShopManager
             Db.Set("print_mode", cmbPrintMode.SelectedIndex == 1 ? InvoicePrinter.ModeReceipt : InvoicePrinter.ModeA4);
             string printer = Convert.ToString(cmbPrinter.SelectedItem);
             Db.Set("receipt_printer", printer == DefaultPrinterLabel ? "" : printer);
+            Db.Set("auto_print", chkAutoPrint.Checked ? "1" : "0");
 
             string msg = "تم الحفظ.";
             var cfg = SyncConfig.Load();
