@@ -13,7 +13,10 @@ namespace ShopManager
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += (s, e) => ReportError(e.Exception);
             AppDomain.CurrentDomain.UnhandledException += (s, e) => ReportError(e.ExceptionObject as Exception);
+            if (!System.IO.File.Exists(Db.DbPath)) Db.Init();   // جهاز جديد: ملف فارغ قبل الاستلام أو الرفع الأول
+            if (!Shift.Startup()) return;                        // استلام ملف البيانات إن كانت المزامنة مفعّلة
             Db.Init();
+            Shift.EnsureStarted(SyncConfig.Load());
             Application.Run(new MainForm());
         }
 

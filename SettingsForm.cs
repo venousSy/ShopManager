@@ -17,13 +17,15 @@ namespace ShopManager
         readonly ComboBox cmbPrintMode = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         readonly ComboBox cmbPrinter = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         const string DefaultPrinterLabel = "(الطابعة الافتراضية في ويندوز)";
+        readonly TextBox txtSyncFolder = new TextBox();
+        readonly TextBox txtMachine = new TextBox();
         readonly UndoStack undo = new UndoStack();
 
         public SettingsForm()
         {
             UI.Rtl(this);
             Text = "الإعدادات";
-            Width = 620; Height = 820;
+            Width = 680; Height = 920;
             KeyPreview = true;
             KeyDown += (a, b) => { if (b.Control && b.KeyCode == Keys.Z && !(ActiveControl is TextBox)) { b.Handled = true; DoUndo(); } };
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -46,6 +48,20 @@ namespace ShopManager
             try { foreach (string p in System.Drawing.Printing.PrinterSettings.InstalledPrinters) cmbPrinter.Items.Add(p); } catch { }
             Row(tl, "طباعة فاتورة البيع", cmbPrintMode);
             Row(tl, "طابعة الإيصالات", cmbPrinter);
+
+            // المزامنة: إعدادات هذا الجهاز فقط (ملف sync_config.json بجانب البرنامج)
+            var syncRow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+            txtSyncFolder.Width = 230;
+            var btnBrowse = new Button { Text = "اختيار...", AutoSize = true };
+            btnBrowse.Click += (a, b) =>
+            {
+                using (var dlg = new FolderBrowserDialog { Description = "مجلد داخل Google Drive أو OneDrive يظهر على الجهازين", UseDescriptionForTitle = true })
+                    if (dlg.ShowDialog(this) == DialogResult.OK) txtSyncFolder.Text = dlg.SelectedPath;
+            };
+            syncRow.Controls.Add(txtSyncFolder);
+            syncRow.Controls.Add(btnBrowse);
+            Row(tl, "مجلد المزامنة بين الجهازين (فارغ = بلا مزامنة)", syncRow);
+            Row(tl, "اسم هذا الجهاز/الوردية", txtMachine);
 
             LoadValues();
 
@@ -89,6 +105,9 @@ namespace ShopManager
             int pi = pr == "" ? 0 : cmbPrinter.Items.IndexOf(pr);
             if (pi < 0) { cmbPrinter.Items.Add(pr); pi = cmbPrinter.Items.Count - 1; }   // طابعة محفوظة غير موصولة الآن
             cmbPrinter.SelectedIndex = pi;
+            var cfg = SyncConfig.Load();
+            txtSyncFolder.Text = cfg.Folder;
+            txtMachine.Text = cfg.Machine;
         }
 
         void DoUndo()
@@ -119,6 +138,20 @@ namespace ShopManager
             Db.Set("receipt_printer", printer == DefaultPrinterLabel ? "" : printer);
 
             string msg = "تم الحفظ.";
+            var cfg = SyncConfig.Load();
+            string newFolder = txtSyncFolder.Text.Trim(), newMachine = txtMachine.Text.Trim();
+            if (newMachine == "") newMachine = Environment.MachineName;
+            if (newFolder != cfg.Folder || newMachine != cfg.Machine)
+            {
+                if (cfg.Enabled && cfg.Handover().LoadState().Holding && newFolder != cfg.Folder)
+                    UI.Warn(this, "هذا الجهاز مستلم للبيانات الآن. سلّم الوردية أولاً (إغلاق الوردية وتسليم) قبل تغيير مجلد المزامنة. لم يُغيَّر المجلد.");
+                else
+                {
+                    if (newFolder != "" && !Directory.Exists(newFolder)) { UI.Warn(this, "مجلد المزامنة غير موجود."); return; }
+                    cfg.Folder = newFolder; cfg.Machine = newMachine; cfg.Save();
+                    msg += "\nإعدادات المزامنة تُطبَّق عند إعادة تشغيل البرنامج.";
+                }
+            }
             if (Math.Abs(newRate - oldRate) > 1e-9)
             {
                 int n = Db.RecalcPrices(newRate);

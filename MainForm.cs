@@ -10,6 +10,7 @@ namespace ShopManager
     {
         readonly Label lblTitle = new Label();
         readonly Label lblToday = new Label();
+        bool closingAfterHandover;
 
         public MainForm()
         {
@@ -47,6 +48,21 @@ namespace ShopManager
             AddBtn(panel, "أفضل الأصناف للفترة", Color.FromArgb(40, 120, 70), () => Open(new TopItemsForm()));
             AddBtn(panel, "التقارير والأرباح  (F6)", Color.FromArgb(0, 110, 110), () => Open(new ReportsForm()));
             AddBtn(panel, "الإعدادات  (F7)", Color.FromArgb(80, 80, 80), () => Open(new SettingsForm()));
+            bool sync = SyncConfig.Load().Enabled;
+            AddBtn(panel, sync ? "إغلاق الوردية وتسليم" : "إغلاق الوردية", Color.FromArgb(150, 30, 60), () =>
+            {
+                if (Shift.Close(this) && sync) { closingAfterHandover = true; Close(); }
+            });
+            // عند إغلاق البرنامج والجهاز ما زال مستلماً: تذكير بالتسليم كي لا ينتظر الجهاز الآخر
+            FormClosing += (a, e) =>
+            {
+                if (closingAfterHandover || !sync || !SyncConfig.Load().Handover().LoadState().Holding) return;
+                var ans = MessageBox.Show(this, "لم تُسلّم الوردية بعد، فلن يستطيع الجهاز الآخر العمل حتى تسلّمها.\n\nنعم: إغلاق الوردية وتسليم الآن\nلا: إغلاق البرنامج دون تسليم (يتابع هذا الجهاز لاحقاً)",
+                    "تسليم الوردية", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1,
+                    MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
+                if (ans == DialogResult.Cancel) { e.Cancel = true; return; }
+                if (ans == DialogResult.Yes && !Shift.Close(this)) e.Cancel = true;
+            };
 
             Controls.Add(panel);
             Controls.Add(lblToday);

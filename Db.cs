@@ -380,6 +380,7 @@ namespace ShopManager
                 "CREATE TABLE IF NOT EXISTS PurchaseReturns(Id INTEGER PRIMARY KEY AUTOINCREMENT, Date TEXT, PurchaseId INTEGER, SupplierId INTEGER, Currency TEXT, Rate REAL, Total REAL, DebtReduction REAL, RefundCash REAL)",
                 "CREATE TABLE IF NOT EXISTS PurchaseReturnItems(Id INTEGER PRIMARY KEY AUTOINCREMENT, ReturnId INTEGER, ProductId INTEGER, Qty REAL, UnitCost REAL)",
                 "CREATE TABLE IF NOT EXISTS Payments(Id INTEGER PRIMARY KEY AUTOINCREMENT, Date TEXT, PartyType TEXT, PartyId INTEGER, Amount REAL, Note TEXT, Currency TEXT DEFAULT 'SYP', Rate REAL DEFAULT 1)",
+                "CREATE TABLE IF NOT EXISTS Shifts(Id INTEGER PRIMARY KEY AUTOINCREMENT, Machine TEXT, StartAt TEXT, EndAt TEXT, Invoices INTEGER, NetSales REAL, CashExpected REAL, CashCounted REAL)",
                 // فهارس لتسريع حساب الأرصدة والفواتير مع كبر البيانات
                 "CREATE INDEX IF NOT EXISTS ix_sales_customer ON Sales(CustomerId)",
                 "CREATE INDEX IF NOT EXISTS ix_sales_date ON Sales(Date)",
