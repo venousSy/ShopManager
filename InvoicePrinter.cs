@@ -255,6 +255,8 @@ namespace ShopManager
                     doc.PrinterSettings = new PrinterSettings();
                 }
             }
+            // لا طابعة حقيقية (PDF/OneNote/XPS...): بدل نافذة "حفظ كملف" نعرض معاينة الإيصال على الشاشة
+            if (!preview && IsVirtualPrinter(doc.PrinterSettings.PrinterName)) preview = true;
             doc.DefaultPageSettings.PaperSize = new PaperSize("Receipt 80mm", PaperWidth80, (int)Math.Ceiling(height) + 40);
             doc.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
             doc.PrintPage += (a, e) =>
@@ -280,6 +282,15 @@ namespace ShopManager
             {
                 UI.Warn(null, "تعذّرت طباعة الإيصال: " + ex.Message + "\nتأكد أن الطابعة موصولة ومشغّلة، أو غيّرها من الإعدادات.");
             }
+        }
+
+        /// <summary>طابعات ويندوز الوهمية التي تحفظ ملفاً بدل الطباعة على ورق.</summary>
+        static bool IsVirtualPrinter(string name)
+        {
+            string n = (name ?? "").ToLowerInvariant();
+            foreach (var k in new[] { "pdf", "xps", "onenote", "fax", "send to", "document writer" })
+                if (n.Contains(k)) return true;
+            return false;
         }
 
         /// <summary>يرسم الإيصال (أو يقيسه فقط إن كان draw=false) ويعيد الارتفاع الكلي.</summary>
