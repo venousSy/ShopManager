@@ -26,16 +26,16 @@ namespace ShopManager
         {
             UI.Rtl(this);
             Text = "الإعدادات";
-            Width = 680; Height = 1010;
+            Width = 760; Height = 800;   // الارتفاع النهائي يُحسب من المحتوى عند الفتح (انظر FitToScreen)
             KeyPreview = true;
             KeyDown += (a, b) => { if (b.Control && b.KeyCode == Keys.Z && !(ActiveControl is TextBox)) { b.Handled = true; DoUndo(); } };
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false; MinimizeBox = true;
             StartPosition = FormStartPosition.CenterParent;
 
-            var tl = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Padding = new Padding(20) };
-            tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
-            tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
+            var tl = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Padding = new Padding(16, 8, 16, 8) };
+            tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46));
+            tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 54));
             Row(tl, "اسم المحل (يظهر في الفاتورة)", txtName);
             Row(tl, "الهاتف / العنوان", txtPhone);
             Row(tl, "سعر صرف الدولار (ل.س)", txtRate);
@@ -67,32 +67,52 @@ namespace ShopManager
 
             LoadValues();
 
-            var btnSave = new Button { Text = "حفظ الإعدادات", Dock = DockStyle.Top, Height = 44 };
+            var btnSave = new Button { Text = "حفظ الإعدادات", Dock = DockStyle.Top, Height = 46, Font = new System.Drawing.Font("Segoe UI", 12, System.Drawing.FontStyle.Bold) };
             btnSave.Click += (a, b) => Save();
             var btnUndo = UndoStack.MakeButton(DoUndo);
-            btnUndo.Dock = DockStyle.Top; btnUndo.AutoSize = false; btnUndo.Height = 44; btnUndo.Margin = new Padding(0);
-            var btnBackup = new Button { Text = "نسخة احتياطية من البيانات", Dock = DockStyle.Top, Height = 44 };
+            var btnBackup = new Button { Text = "نسخة احتياطية من البيانات" };
             btnBackup.Click += (a, b) => Backup();
-            var btnTestReceipt = new Button { Text = "معاينة إيصال تجريبي (80mm)", Dock = DockStyle.Top, Height = 44 };
+            var btnTestReceipt = new Button { Text = "معاينة إيصال تجريبي (80mm)" };
             btnTestReceipt.Click += (a, b) => InvoicePrinter.PreviewReceipt();
-            var btnUsers = new Button { Text = "المستخدمون والصلاحيات", Dock = DockStyle.Top, Height = 44 };
+            var btnUsers = new Button { Text = "المستخدمون والصلاحيات" };
             btnUsers.Click += (a, b) => { using (var f = new UsersForm()) f.ShowDialog(this); };
-            var info = new Label { Dock = DockStyle.Top, Height = 60, Padding = new Padding(20, 10, 20, 0), Text = "ملف البيانات: " + Db.DbPath };
+
+            // الأزرار الأربعة في عمودين بدل أربعة أسطر متتالية (توفير ارتفاع)
+            var grid = new TableLayoutPanel { Dock = DockStyle.Top, Height = 92, ColumnCount = 2, RowCount = 2, Padding = new Padding(0) };
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            foreach (var b in new[] { btnUsers, btnBackup, btnTestReceipt, btnUndo })
+            {
+                b.AutoSize = false; b.Dock = DockStyle.Fill; b.Margin = new Padding(2);
+                grid.Controls.Add(b);
+            }
+            var info = new Label { Dock = DockStyle.Top, Height = 34, Padding = new Padding(16, 8, 16, 0), Text = "ملف البيانات: " + Db.DbPath, AutoEllipsis = true };
 
             Controls.Add(info);
-            Controls.Add(btnUsers);
-            Controls.Add(btnTestReceipt);
-            Controls.Add(btnBackup);
-            Controls.Add(btnUndo);
+            Controls.Add(grid);
             Controls.Add(btnSave);
             Controls.Add(tl);
+            Load += (a, b) => FitToScreen(tl.Height + btnSave.Height + grid.Height + info.Height + 8);
+        }
+
+        /// <summary>ارتفاع النافذة = محتواها، وبحد أقصى مساحة الشاشة (فوق شريط المهام) مع شريط تمرير إن لزم.</summary>
+        void FitToScreen(int contentHeight)
+        {
+            var wa = Screen.FromControl(this).WorkingArea;
+            int frame = Height - ClientSize.Height;
+            int h = Math.Min(contentHeight + frame, wa.Height);
+            if (contentHeight + frame > wa.Height) AutoScroll = true;
+            Height = h;
+            Top = Math.Max(wa.Top, wa.Top + (wa.Height - h) / 2);
         }
 
         static void Row(TableLayoutPanel tl, string label, Control tb)
         {
-            tl.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Right, Margin = new Padding(3, 10, 3, 10) });
+            tl.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Right, Margin = new Padding(3, 7, 3, 7) });
             tb.Dock = DockStyle.Fill;
-            tb.Margin = new Padding(3, 6, 3, 6);
+            tb.Margin = new Padding(3, 4, 3, 4);
             tl.Controls.Add(tb);
         }
 
