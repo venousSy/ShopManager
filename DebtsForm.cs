@@ -60,6 +60,9 @@ namespace ShopManager
                 bu.Click += (a, b) => UnfreezeSelected();
                 bar.Controls.Add(bu);
             }
+            var bx = new Button { Text = "تصدير إلى إكسل", AutoSize = true, Margin = new Padding(6, 8, 4, 0), BackColor = Color.FromArgb(214, 238, 214) };
+            bx.Click += (a, b) => ExportExcel();
+            bar.Controls.Add(bx);
             // حذف دفعة مسجّلة (بالتراجع) يحتاج صلاحية "تعديل وإلغاء الفواتير والتراجع عنها"
             if (Session.Can(Perm.EditInvoices)) bar.Controls.Add(UndoStack.MakeButton(DoUndo));
             lbl.AutoSize = true;
@@ -135,6 +138,20 @@ namespace ShopManager
             int id; string name;
             if (!Row(g, out id, out name)) return;
             new DebtInvoicesForm(id, name).Show();
+        }
+
+        /// <summary>ملف إكسل واحد بثلاث أوراق: الجارية، المجمّدة، الموردون. يُقرأ من القاعدة مباشرة لا من الشاشة.</summary>
+        void ExportExcel()
+        {
+            string when = "بتاريخ " + DateTime.Now.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+            Func<DataRow, bool> over = r => r.Table.Columns.Contains("تنبيه") && Convert.ToString(r["تنبيه"]) != "";
+            ExcelExport.Save(this, "الديون",
+                new ExcelSheet { Name = "ديون جارية", Title = "ديون الزبائن الجارية " + when, Table = Db.Query(Sql.CustomerBalances(0, "Bal DESC")),
+                                 Hide = new[] { "Id", "الحالة" }, Totals = new[] { ColSyp }, Highlight = over },
+                new ExcelSheet { Name = "ديون مجمدة", Title = "الديون المجمّدة " + when, Table = Db.Query(Sql.CustomerBalances(1, "Bal DESC")),
+                                 Hide = new[] { "Id" }, Totals = new[] { ColSyp }, Highlight = over },
+                new ExcelSheet { Name = "ديون الموردين", Title = "ما علينا للموردين " + when, Table = Db.Query(Sql.PartyBalances(false)),
+                                 Hide = new[] { "Id" }, Totals = new[] { ColUsd, ColSyp } });
         }
 
         void UnfreezeSelected()
