@@ -332,7 +332,9 @@ namespace ShopManager
         {
             int id = Convert.ToInt32(p["Id"]);
             if (record) PushDraft("إضافة صنف");
-            if (sale && p.Table.Columns.Contains("ExpiryDate"))
+            if (sale && Db.D(p["SellPrice"]) <= 0)
+                Status("⚠ \"" + p["Name"] + "\" بلا سعر بيع (صفر). اكتب السعر قبل الحفظ، أو سعّره من شاشة الأصناف.", true);
+            else if (sale && p.Table.Columns.Contains("ExpiryDate"))
             {
                 var st = ExpiryUtil.Of(p["ExpiryDate"]);
                 if (st == ExpiryUtil.State.Expired) Status("⚠ انتبه: \"" + p["Name"] + "\" منتهي الصلاحية منذ " + p["ExpiryDate"] + ".", true);
@@ -730,6 +732,25 @@ namespace ShopManager
                 lines.Add(new Line { Id = Convert.ToInt32(r.Cells["Id"].Value), Name = Convert.ToString(r.Cells["Name"].Value), Qty = q, Price = p, Prev = Db.Num(Convert.ToString(r.Cells["Prev"].Value)) });
             }
             if (lines.Count == 0) { UI.Warn(this, "الفاتورة فارغة."); return false; }
+
+            // صنف بسعر صفر (غالباً صنف جديد لم يُسعَّر بعد): يُمنع البيع، إلا لمن يملك صلاحية الخصم إن أكّد أنه مجاني
+            if (sale)
+            {
+                var free = lines.FindAll(l => l.Price <= 0).ConvertAll(l => "• " + l.Name);
+                if (free.Count > 0)
+                {
+                    string list = string.Join("\n", free.GetRange(0, Math.Min(free.Count, 10)));
+                    if (!Session.Can(Perm.Discount))
+                    {
+                        UI.Warn(this, "لا يمكن البيع بسعر صفر. هذه الأصناف بلا سعر:\n" + list +
+                                      "\n\nاطلب من المدير تسعيرها من شاشة الأصناف، أو احذف السطر.");
+                        return false;
+                    }
+                    if (!UI.Confirm(this, "هذه الأصناف سعرها صفر (غالباً لم تُسعَّر بعد):\n" + list +
+                                          "\n\nهل تريد فعلاً بيعها مجاناً؟\n(اختر \"لا\" ثم اكتب السعر في عمود سعر البيع)"))
+                        return false;
+                }
+            }
 
             double sub = 0;
             foreach (var l in lines) sub += l.Qty * l.Price;
