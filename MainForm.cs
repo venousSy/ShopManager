@@ -34,7 +34,7 @@ namespace ShopManager
 
             panel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(30), WrapContents = true };   // بلا AutoScroll: يُفسد مواضع النقر مع الاتجاه العربي
             // كل زر مربوط بصلاحية (null = متاح للجميع). الزر غير المسموح يُخفى ومفتاحه لا يعمل.
-            AddBtn(panel, "فاتورة بيع  (F1)", Color.FromArgb(31, 78, 120), Perm.Sell, Keys.F1, () => Open(new InvoiceForm(true)));
+            AddBtn(panel, "فاتورة بيع  (F1)", Color.FromArgb(31, 78, 120), Perm.Sell, Keys.F1, OpenSale);
             AddBtn(panel, "فاتورة مشتريات  (F2)", Color.FromArgb(55, 86, 35), Perm.Purchases, Keys.F2, () => Open(new InvoiceForm(false)));
             AddBtn(panel, "الأصناف والمخزون  (F3)", Color.FromArgb(127, 96, 0), Perm.Products, Keys.F3, () => Open(new ProductsForm()));
             AddBtn(panel, "المصاريف  (F4)", Color.FromArgb(150, 60, 30), Perm.Expenses, Keys.F4, () => Open(new ExpensesForm()));
@@ -164,6 +164,14 @@ namespace ShopManager
         void Open(Form f)
         {
             UI.ShowPage(f, RefreshHeader);
+        }
+
+        /// <summary>فاتورة بيع: إن كانت نافذة الفواتير مفتوحة يُضاف إليها تبويب لزبون جديد بدل نافذة ثانية.</summary>
+        void OpenSale()
+        {
+            var open = Application.OpenForms.OfType<SalesTabsForm>().FirstOrDefault();
+            if (open != null) open.BringUpWithNewInvoice();
+            else Open(new SalesTabsForm());
         }
 
         void Run(Action act)

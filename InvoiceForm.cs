@@ -60,6 +60,34 @@ namespace ShopManager
             if (editId > 0) LoadForEdit();
             KeyDown += OnFormKeyDown;
             Shown += (a, b) => { if (closeOnShow) { Close(); return; } txtBarcode.Focus(); };
+            cmbParty.TextChanged += (a, b) => Changed?.Invoke();
+            // إغلاق فاتورة فيها أصناف غير محفوظة يحتاج تأكيداً (نافذة مستقلة أو تبويب أو تبديل المستخدم)
+            FormClosing += (a, b) =>
+            {
+                if (allowClose || closeOnShow || !HasLines || b.CloseReason == CloseReason.WindowsShutDown) return;
+                if (!UI.Confirm(this, "الفاتورة (" + TabCaption(0) + ") فيها أصناف غير محفوظة.\nإغلاقها وحذف أصنافها؟")) b.Cancel = true;
+            };
+        }
+
+        // ---------------- للتبويبات (عدة فواتير بيع معاً) ----------------
+        bool allowClose;
+        /// <summary>يُطلق عند تغيّر الأصناف أو الزبون، فيحدّث المضيف عنوان التبويب.</summary>
+        public event Action Changed;
+        public bool HasLines { get { return grid.Rows.Count > 0; } }
+        public void FocusBarcode() { txtBarcode.Focus(); }
+
+        /// <summary>
+        /// عنوان التبويب الذي يميّز هذه الفاتورة عن غيرها عند البائع.
+        /// number: رقم التبويب (1، 2، 3...)، و 0 عند استعماله داخل رسالة.
+        /// المتاح: cmbParty.Text (اسم الزبون، قد يكون فارغاً)، grid.Rows.Count (عدد الأسطر)، lblNet.Text (الصافي منسّقاً).
+        /// </summary>
+        public string TabCaption(int number)
+        {
+            string name = cmbParty.Text.Trim();
+            if (name.Length > 18) name = name.Substring(0, 18) + "…";
+            if (name == "") name = number > 0 ? "زبون " + number : "زبون نقدي";
+            int n = grid.Rows.Count;
+            return n == 0 ? name : name + "  (" + n + " صنف · " + lblNet.Text + ")";
         }
 
         // ---------------- الواجهة ----------------
@@ -630,6 +658,7 @@ namespace ShopManager
                 }
             }
             finally { busy = false; }
+            Changed?.Invoke();
         }
 
         void ClearForm(bool record = true)
@@ -656,6 +685,7 @@ namespace ShopManager
             {
                 if (print && sale) InvoicePrinter.ShowSale(id);
                 UI.Info(this, "تم تعديل " + (sale ? "فاتورة البيع" : "فاتورة المشتريات") + " رقم " + id + ".");
+                allowClose = true;
                 Close();
                 return;
             }
