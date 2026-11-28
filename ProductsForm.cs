@@ -45,6 +45,7 @@ namespace ShopManager
             bar.Controls.Add(MakeBtn("حفظ التعديلات", (a, b) => SaveChanges(false)));
             bar.Controls.Add(MakeBtn("حذف الصنف الحالي", (a, b) => DeleteCurrent()));
             bar.Controls.Add(MakeBtn("استيراد من CSV", (a, b) => ImportCsv()));
+            bar.Controls.Add(MakeBtn("تصدير إلى إكسل", (a, b) => ExportExcel()));
             bar.Controls.Add(MakeBtn("اعتماد المخزون كمخزون افتتاحي", (a, b) => SetOpeningStock()));
             bar.Controls.Add(MakeBtn("أسماء المورد المحفوظة", (a, b) => { new AliasesForm().Show(); }));
             bar.Controls.Add(UndoStack.MakeButton(DoUndo));
@@ -114,6 +115,35 @@ namespace ShopManager
             var b = new Button { Text = text, AutoSize = true, Margin = new Padding(6, 8, 4, 0) };
             b.Click += h;
             return b;
+        }
+
+        /// <summary>
+        /// تصدير المخزون كما هو محفوظ في القاعدة (لا تدخل التعديلات غير المحفوظة).
+        /// التكلفة وقيمة المخزون تظهر فقط لمن يملك صلاحية الأرباح. النواقص (المخزون ≤ الحد الأدنى) بالأحمر.
+        /// </summary>
+        void ExportExcel()
+        {
+            if (tbl.GetChanges() != null)
+                UI.Info(this, "يوجد تعديلات غير محفوظة في الجدول، ولن تظهر في الملف. سيُصدَّر المخزون المحفوظ فقط.");
+            string rate = Db.Rate.ToString(Inv);
+            string usdToSyp = "CASE WHEN CostCurrency='USD' THEN CostPrice*" + rate + " ELSE CostPrice END";
+            var t = Db.Query(
+                "SELECT Name AS \"الصنف\", IFNULL(Barcode,'') AS \"الباركود\", IFNULL(Category,'') AS \"القسم\", " +
+                "Stock AS \"المخزون\", MinStock AS \"الحد الأدنى\", SellPrice AS \"سعر البيع (ل.س)\", " +
+                "CostPrice AS \"سعر الشراء\", CostCurrency AS \"عملة الشراء\", " +
+                usdToSyp + " AS \"التكلفة (ل.س)\", Stock*(" + usdToSyp + ") AS \"قيمة المخزون (ل.س)\", " +
+                "Stock*SellPrice AS \"قيمة المخزون بسعر البيع (ل.س)\" " +
+                "FROM Products ORDER BY Category, Name");
+            bool profits = Session.Can(Perm.Profits);
+            ExcelExport.Save(this, "المخزون", new ExcelSheet
+            {
+                Name = "المخزون",
+                Title = "جرد المخزون بتاريخ " + DateTime.Now.ToString("yyyy-MM-dd HH:mm", Inv) + "   |   سعر الصرف " + rate,
+                Table = t,
+                Hide = profits ? new string[0] : new[] { "سعر الشراء", "عملة الشراء", "التكلفة (ل.س)", "قيمة المخزون (ل.س)" },
+                Totals = profits ? new[] { "قيمة المخزون (ل.س)", "قيمة المخزون بسعر البيع (ل.س)" } : new[] { "قيمة المخزون بسعر البيع (ل.س)" },
+                Highlight = r => Db.D(r["المخزون"]) <= Db.D(r["الحد الأدنى"]) && Db.D(r["الحد الأدنى"]) > 0
+            });
         }
 
         void DoUndo()
