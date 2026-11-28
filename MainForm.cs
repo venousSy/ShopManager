@@ -46,6 +46,7 @@ namespace ShopManager
             AddBtn(panel, "مرتجعات المبيعات", Color.FromArgb(150, 90, 30), Perm.SaleReturns, Keys.None, () => Open(new ReturnsForm(true, 0)));
             AddBtn(panel, "مرتجعات المشتريات", Color.FromArgb(110, 90, 30), Perm.PurchaseReturns, Keys.None, () => Open(new ReturnsForm(false, 0)));
             AddBtn(panel, "النواقص", Color.FromArgb(160, 40, 40), null, Keys.None, () => Open(new ShortagesForm()));
+            AddBtn(panel, "ربط الباركود", Color.FromArgb(60, 60, 140), Perm.Products, Keys.None, () => Open(new BarcodeLinkForm()));
             AddBtn(panel, "الصلاحية", Color.FromArgb(190, 90, 20), null, Keys.None, () => Open(new ExpiryForm()));
             AddBtn(panel, "أفضل الأصناف للفترة", Color.FromArgb(40, 120, 70), Perm.Profits, Keys.None, () => Open(new TopItemsForm()));
             AddBtn(panel, "التقارير والأرباح  (F6)", Color.FromArgb(0, 110, 110), Perm.Profits, Keys.F6, () => Open(new ReportsForm()));

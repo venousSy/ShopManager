@@ -53,6 +53,7 @@ namespace ShopManager
             bar.Controls.Add(MakeBtn("حفظ التعديلات", (a, b) => SaveChanges(false)));
             bar.Controls.Add(MakeBtn("حذف الصنف الحالي", (a, b) => DeleteCurrent()));
             bar.Controls.Add(MakeBtn("استيراد من CSV", (a, b) => ImportCsv()));
+            bar.Controls.Add(MakeBtn("ربط الباركود بالمسح", (a, b) => UI.ShowPage(new BarcodeLinkForm(), () => { if (!IsDisposed && tbl.GetChanges() == null) Reload(); })));
             bar.Controls.Add(MakeBtn("تصدير إلى إكسل", (a, b) => ExportExcel()));
             bar.Controls.Add(MakeBtn("اعتماد المخزون كمخزون افتتاحي", (a, b) => SetOpeningStock()));
             bar.Controls.Add(MakeBtn("أسماء المورد المحفوظة", (a, b) => { new AliasesForm().Show(); }));
@@ -314,12 +315,17 @@ namespace ShopManager
         /// </summary>
         void RefreshUntouchedStock()
         {
+            // وكذلك الباركود: قد يكون رُبط من شاشة "ربط الباركود" بعد فتح هذا الجدول
             foreach (DataRow r in tbl.Rows)
             {
                 if (r.RowState != DataRowState.Modified) continue;
-                if (!Equals(r["Stock", DataRowVersion.Original], r["Stock", DataRowVersion.Current])) continue;
-                object cur = Db.Scalar("SELECT Stock FROM Products WHERE Id=@p0", r["Id"]);
-                if (cur != null && !(cur is DBNull)) r["Stock"] = cur;
+                foreach (var col in new[] { "Stock", "Barcode" })
+                {
+                    if (!Equals(r[col, DataRowVersion.Original], r[col, DataRowVersion.Current])) continue;
+                    object cur = Db.Scalar("SELECT " + col + " FROM Products WHERE Id=@p0", r["Id"]);
+                    if (cur == null || (cur is DBNull && col == "Stock")) continue;
+                    r[col] = cur;
+                }
             }
         }
 
