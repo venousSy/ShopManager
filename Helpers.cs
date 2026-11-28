@@ -16,21 +16,8 @@ namespace ShopManager
             f.RightToLeft = RightToLeft.Yes;
             f.RightToLeftLayout = true;
             f.Font = new Font("Segoe UI", 11);
-            // زر التصغير: بدل الإخفاء الكامل تصبح النافذة نصف الشاشة على اليسار
-            f.Resize += (a, b) =>
-            {
-                if (f.WindowState == FormWindowState.Minimized && f.MinimizeBox && f.IsHandleCreated)
-                    f.BeginInvoke(new Action(() => SnapLeftHalf(f)));
-            };
-        }
-
-        static void SnapLeftHalf(Form f)
-        {
-            if (f.IsDisposed) return;
-            Rectangle wa = Screen.FromPoint(Cursor.Position).WorkingArea;
-            f.WindowState = FormWindowState.Normal;
-            f.StartPosition = FormStartPosition.Manual;
-            f.Bounds = new Rectangle(wa.Left, wa.Top, wa.Width / 2, wa.Height);
+            // زر التصغير يعمل كالمعتاد (ينزل إلى شريط المهام). كان هنا اعتراض يحوّل التصغير
+            // إلى "نصف الشاشة على اليسار"، فلم يكن يمكن تصغير البرنامج ولا صفحاته.
         }
 
         public static void Warn(IWin32Window owner, string msg)
