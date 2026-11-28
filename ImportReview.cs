@@ -169,11 +169,10 @@ namespace ShopManager
                     string name = Convert.ToString(r.Cells["NewName"].Value).Trim();
                     string cat = Convert.ToString(r.Cells["Cat"].Value).Trim();
                     if (name == "") { UI.Warn(this, "اكتب اسم الصنف الجديد للصف: " + key); return; }
-                    if (cat == "") { UI.Warn(this, "حدّد القسم للصنف الجديد: " + name); return; }
                     object exists = Db.Scalar("SELECT Id FROM Products WHERE Name=@p0", name);
                     if (exists != null && !(exists is DBNull))
                     { UI.Warn(this, "الاسم \"" + name + "\" موجود في القائمة. اختر (ربط بصنف موجود) أو غيّر الاسم."); return; }
-                    result.Add(new ImportDecision { Index = i, Action = "new", NewName = name, Category = cat });
+                    result.Add(new ImportDecision { Index = i, Action = "new", NewName = name, Category = cat == "" ? null : cat });   // القسم اختياري
                 }
                 else result.Add(new ImportDecision { Index = i, Action = "skip" });
             }

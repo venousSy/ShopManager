@@ -58,13 +58,15 @@ namespace ShopManager
             bar.Controls.Add(MakeBtn("اعتماد المخزون كمخزون افتتاحي", (a, b) => SetOpeningStock()));
             bar.Controls.Add(MakeBtn("أسماء المورد المحفوظة", (a, b) => { new AliasesForm().Show(); }));
             bar.Controls.Add(UndoStack.MakeButton(DoUndo));
+            lblSaved = new Label { AutoSize = true, Margin = new Padding(14, 14, 4, 0), ForeColor = Color.DarkGreen, Font = new Font("Segoe UI", 11, FontStyle.Bold) };
+            bar.Controls.Add(lblSaved);
 
             lblInfo.Dock = DockStyle.Bottom;
             lblInfo.Height = 64;
             lblInfo.Padding = new Padding(8, 8, 8, 0);
             lblInfo.Text = "اكتب في الجدول مباشرة ثم اضغط (حفظ التعديلات). عملة الشراء: USD أو SYP. " +
                            "نسبة الربح: 0.15 تعني 15% فيُحسب سعر البيع تلقائياً ويتغيّر مع سعر الصرف للأصناف المشتراة بالدولار. " +
-                           "اتركها -1 لسعر بيع ثابت. وتعديلك يدوياً لسعر البيع يجعله ثابتاً. القسم مطلوب لكل صنف جديد. " +
+                           "اتركها -1 لسعر بيع ثابت. وتعديلك يدوياً لسعر البيع يجعله ثابتاً. القسم اختياري. الباركود يُحفظ فور كتابته أو مسحه. " +
                            "تاريخ الإنتاج والانتهاء اختياريان (مثل 15/3/2027 أو 3/2027): المنتهي بالأحمر والقريب بالبرتقالي.";
 
             Controls.Add(grid);
@@ -96,7 +98,26 @@ namespace ShopManager
                 if (row.RowState == DataRowState.Detached) return;
                 object old = row[col];
                 if (Equals(old, e2.ProposedValue)) return;
+                if (col.ColumnName == "Barcode" && IsSavedRow(row))
+                {
+                    // الباركود يُحفظ فوراً، فالتراجع يعيده في القاعدة أيضاً
+                    object id = row["Id"];
+                    undo.Push("باركود", () =>
+                    {
+                        suspend = true;
+                        try { row[col] = old; Db.Exec("UPDATE Products SET Barcode=@p0 WHERE Id=@p1", Blank(old) ? null : Convert.ToString(old), id); }
+                        finally { suspend = false; }
+                    });
+                    return;
+                }
                 undo.Push("تعديل (" + col.ColumnName + ")", () => { suspend = true; try { row[col] = old; } finally { suspend = false; } });
+            };
+            // الباركود يُحفظ تلقائياً فور كتابته أو مسحه (بعد انتهاء الجدول من تثبيت الخلية)
+            tbl.ColumnChanged += (s2, e2) =>
+            {
+                if (suspend || e2.Column.ColumnName != "Barcode" || !IsSavedRow(e2.Row)) return;
+                DataRow row = e2.Row;
+                BeginInvoke(new Action(() => AutoSaveBarcode(row)));
             };
             tbl.RowChanged += (s2, e2) =>
             {
@@ -117,7 +138,63 @@ namespace ShopManager
                 if (b.Control && b.KeyCode == Keys.Z && !grid.IsCurrentCellInEditMode && !(ActiveControl is TextBox))
                 { b.Handled = true; DoUndo(); }
             };
+            // تعديلات غير محفوظة (غير الباركود الذي يُحفظ وحده) عند الإغلاق: سؤال بدل ضياعها
+            FormClosing += (a, b) =>
+            {
+                if (b.CloseReason == CloseReason.WindowsShutDown) return;
+                grid.EndEdit();
+                try { BindingContext[tbl].EndCurrentEdit(); } catch { }
+                if (!HasUnsavedEdits()) return;
+                var ans = MessageBox.Show(this, "في جدول الأصناف تعديلات لم تُحفظ.\nحفظها قبل الإغلاق؟", "الأصناف والمخزون",
+                    MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1,
+                    MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
+                if (ans == DialogResult.Cancel || (ans == DialogResult.Yes && !SaveChanges(true))) b.Cancel = true;
+            };
             FormClosed += (a, b) => { conn.Dispose(); };
+        }
+
+        /// <summary>صف موجود في القاعدة (ليس صنفاً جديداً لم يُحفظ بعد).</summary>
+        static bool IsSavedRow(DataRow r)
+        {
+            return r.RowState != DataRowState.Added && r.RowState != DataRowState.Detached && r.RowState != DataRowState.Deleted && !(r["Id"] is DBNull);
+        }
+
+        Label lblSaved;
+
+        void AutoSaveBarcode(DataRow row)
+        {
+            if (IsDisposed || !IsSavedRow(row)) return;
+            object id = row["Id"];
+            string name = Convert.ToString(row["Name"]);
+            string code = Convert.ToString(row["Barcode"]).Trim();
+            string inDb = Convert.ToString(Db.Scalar("SELECT IFNULL(Barcode,'') FROM Products WHERE Id=@p0", id));
+            if (code == inDb) return;
+            if (code != "")
+            {
+                object other = Db.Scalar("SELECT Name FROM Products WHERE Barcode=@p0 AND Id<>@p1", code, id);
+                if (other != null && !(other is DBNull))
+                {
+                    suspend = true;
+                    try { row["Barcode"] = inDb == "" ? (object)DBNull.Value : inDb; } finally { suspend = false; }
+                    UI.Warn(this, "الباركود " + code + " مسجّل على صنف آخر: " + other + "\nلم يُحفظ للصنف \"" + name + "\".");
+                    return;
+                }
+            }
+            Db.Exec("UPDATE Products SET Barcode=@p0 WHERE Id=@p1", code == "" ? null : code, id);
+            if (lblSaved != null) lblSaved.Text = "✓ حُفظ الباركود: " + name;
+        }
+
+        /// <summary>هل في الجدول تعديل غير محفوظ غير الباركود (الذي يُحفظ تلقائياً)؟</summary>
+        bool HasUnsavedEdits()
+        {
+            foreach (DataRow r in tbl.Rows)
+            {
+                if (r.RowState == DataRowState.Added || r.RowState == DataRowState.Deleted) return true;
+                if (r.RowState != DataRowState.Modified) continue;
+                foreach (DataColumn c in tbl.Columns)
+                    if (c.ColumnName != "Barcode" && !Equals(r[c, DataRowVersion.Original], r[c, DataRowVersion.Current])) return true;
+            }
+            return false;
         }
 
         static Button MakeBtn(string text, EventHandler h)
@@ -271,12 +348,10 @@ namespace ShopManager
             {
                 grid.EndEdit();
                 BindingContext[tbl].EndCurrentEdit();
-                var noCat = new List<string>();
                 var badDate = new List<string>();
                 foreach (DataRow r in tbl.Rows)
                 {
                     if (r.RowState != DataRowState.Added && r.RowState != DataRowState.Modified) continue;
-                    if (Blank(r["Category"])) noCat.Add(Convert.ToString(r["Name"]));
                     if (!ExpiryUtil.TryParse(Convert.ToString(r["ProdDate"]), false, out _) ||
                         !ExpiryUtil.TryParse(Convert.ToString(r["ExpiryDate"]), true, out _))
                         badDate.Add(Convert.ToString(r["Name"]));
@@ -284,11 +359,6 @@ namespace ShopManager
                 if (badDate.Count > 0)
                 {
                     UI.Warn(this, "تاريخ غير مفهوم لهذه الأصناف. اكتبه مثل 15/3/2027 أو 3/2027 أو اتركه فارغاً:\n" + string.Join("\n", badDate.GetRange(0, Math.Min(badDate.Count, 10))));
-                    return false;
-                }
-                if (noCat.Count > 0)
-                {
-                    UI.Warn(this, "حدّد القسم لهذه الأصناف قبل الحفظ (ليوضع كل صنف مع أصنافه):\n" + string.Join("\n", noCat.GetRange(0, Math.Min(noCat.Count, 10))));
                     return false;
                 }
                 var ch = Db.TableChange.Begin("Products");

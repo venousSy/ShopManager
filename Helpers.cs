@@ -481,7 +481,7 @@ namespace ShopManager
                 };
                 row("اسم الصنف", txtName);
                 row("الباركود (اختياري)", txtBar);
-                row("القسم (مطلوب)", cmbCat);
+                row("القسم (اختياري)", cmbCat);
                 row("نسبة الربح (0.15 = 15%)", txtMargin);
                 row("أو سعر بيع ثابت (ل.س)", txtSell);
                 var txtProd = new TextBox { PlaceholderText = "اختياري، مثل 1/2026" };
@@ -491,7 +491,7 @@ namespace ShopManager
                 var note = new Label
                 {
                     Dock = DockStyle.Top, Height = 80, Padding = new Padding(16, 6, 16, 0),
-                    Text = "اختر القسم ليُوضع الصنف مع أصنافه في القائمة. عملة الشراء: " + (cur == "USD" ? "دولار" : "ليرة") + ". إن كتبت سعر بيع ثابتاً تُهمَل نسبة الربح. وإلا يُحسب سعر البيع تلقائياً من سعر الشراء الذي تكتبه في الفاتورة."
+                    Text = "القسم اختياري: يضع الصنف مع أصنافه في القائمة، ويمكن تحديده لاحقاً من شاشة الأصناف. عملة الشراء: " + (cur == "USD" ? "دولار" : "ليرة") + ". إن كتبت سعر بيع ثابتاً تُهمَل نسبة الربح. وإلا يُحسب سعر البيع تلقائياً من سعر الشراء الذي تكتبه في الفاتورة."
                 };
                 var ok = new Button { Text = "إضافة الصنف", Dock = DockStyle.Bottom, Height = 44 };
                 int newId = 0;
@@ -499,7 +499,6 @@ namespace ShopManager
                 {
                     string n = txtName.Text.Trim();
                     if (n == "") { UI.Warn(f, "اسم الصنف مطلوب."); return; }
-                    if (cmbCat.Text.Trim() == "") { UI.Warn(f, "اختر القسم أولاً ليوضع الصنف مع أصنافه (يمكنك كتابة قسم جديد)."); return; }
                     double margin = Db.Num(txtMargin.Text);
                     double sell = Db.Num(txtSell.Text);
                     if (sell > 0) margin = -1;
@@ -510,7 +509,7 @@ namespace ShopManager
                     try
                     {
                         Db.Exec("INSERT INTO Products(Name,Barcode,Category,CostPrice,CostCurrency,SellPrice,Stock,MinStock,Margin,ProdDate,ExpiryDate) VALUES(@p0,@p1,@p2,0,@p3,@p4,0,0,@p5,@p6,@p7)",
-                            n, bc == "" ? null : bc, cmbCat.Text.Trim(), cur, sell, margin, prod, exp);
+                            n, bc == "" ? null : bc, cmbCat.Text.Trim() == "" ? null : cmbCat.Text.Trim(), cur, sell, margin, prod, exp);
                         newId = Convert.ToInt32(Db.Scalar("SELECT Id FROM Products WHERE Name=@p0", n));
                         f.DialogResult = DialogResult.OK;
                     }
