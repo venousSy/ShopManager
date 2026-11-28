@@ -747,7 +747,8 @@ namespace ShopManager
                     !UI.Confirm(this, "⚠ تنبيه: دين الزبون \"" + party + "\" سيصبح " + (prevBal + rem).ToString("N0") + " ل.س وهو فوق الحد (" + limit.ToString("N0") + " ل.س).\nهل تريد المتابعة؟"))
                     return false;
             }
-            if (overStock && !UI.Confirm(this, "بعض الكميات أكبر من المخزون المسجّل. هل تريد المتابعة؟")) return false;
+            // يُطفأ من الإعدادات أثناء البيع قبل الجرد، ويُعاد تشغيله بعده
+            if (overStock && Db.Get("stock_warning", "1") == "1" && !UI.Confirm(this, "بعض الكميات أكبر من المخزون المسجّل. هل تريد المتابعة؟")) return false;
 
             string now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", Inv);
             using (var c = Db.Open())
