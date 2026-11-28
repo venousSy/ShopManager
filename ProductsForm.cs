@@ -34,6 +34,14 @@ namespace ShopManager
 
             UI.SetupGrid(grid, false);
             grid.AllowUserToDeleteRows = false;
+            // منتهي الصلاحية بالأحمر، والقريب من الانتهاء بالبرتقالي
+            grid.CellFormatting += (a, e) =>
+            {
+                if (e.RowIndex < 0 || grid.Columns["ExpiryDate"] == null) return;
+                var st = ExpiryUtil.Of(grid.Rows[e.RowIndex].Cells["ExpiryDate"].Value);
+                if (st == ExpiryUtil.State.Expired) e.CellStyle.BackColor = ExpiryUtil.ExpiredBack;
+                else if (st == ExpiryUtil.State.Soon) e.CellStyle.BackColor = ExpiryUtil.SoonBack;
+            };
 
             var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 62, Padding = new Padding(8), BackColor = Color.FromArgb(235, 242, 250) };
             txtSearch.Width = 240;
@@ -55,14 +63,15 @@ namespace ShopManager
             lblInfo.Padding = new Padding(8, 8, 8, 0);
             lblInfo.Text = "اكتب في الجدول مباشرة ثم اضغط (حفظ التعديلات). عملة الشراء: USD أو SYP. " +
                            "نسبة الربح: 0.15 تعني 15% فيُحسب سعر البيع تلقائياً ويتغيّر مع سعر الصرف للأصناف المشتراة بالدولار. " +
-                           "اتركها -1 لسعر بيع ثابت. وتعديلك يدوياً لسعر البيع يجعله ثابتاً. القسم مطلوب لكل صنف جديد.";
+                           "اتركها -1 لسعر بيع ثابت. وتعديلك يدوياً لسعر البيع يجعله ثابتاً. القسم مطلوب لكل صنف جديد. " +
+                           "تاريخ الإنتاج والانتهاء اختياريان (مثل 15/3/2027 أو 3/2027): المنتهي بالأحمر والقريب بالبرتقالي.";
 
             Controls.Add(grid);
             Controls.Add(lblInfo);
             Controls.Add(bar);
 
             conn = Db.Open();
-            ad = new SQLiteDataAdapter("SELECT Id,Name,Barcode,Category,CostPrice,CostCurrency,Margin,SellPrice,Stock,MinStock FROM Products ORDER BY Category, Name", conn);
+            ad = new SQLiteDataAdapter("SELECT Id,Name,Barcode,Category,CostPrice,CostCurrency,Margin,SellPrice,Stock,MinStock,ProdDate,ExpiryDate FROM Products ORDER BY Category, Name", conn);
             // التحديث بالمعرّف فقط (لا مقارنة بكل القيم القديمة) حتى لا يفشل الحفظ لأن البيع غيّر المخزون؛
             // المخزون نفسه يُحدَّث من قاعدة البيانات قبل الحفظ في RefreshUntouchedStock.
             cb = new SQLiteCommandBuilder(ad) { ConflictOption = ConflictOption.OverwriteChanges };
@@ -132,7 +141,8 @@ namespace ShopManager
                 "Stock AS \"المخزون\", MinStock AS \"الحد الأدنى\", SellPrice AS \"سعر البيع (ل.س)\", " +
                 "CostPrice AS \"سعر الشراء\", CostCurrency AS \"عملة الشراء\", " +
                 usdToSyp + " AS \"التكلفة (ل.س)\", Stock*(" + usdToSyp + ") AS \"قيمة المخزون (ل.س)\", " +
-                "Stock*SellPrice AS \"قيمة المخزون بسعر البيع (ل.س)\" " +
+                "Stock*SellPrice AS \"قيمة المخزون بسعر البيع (ل.س)\", " +
+                "IFNULL(ProdDate,'') AS \"تاريخ الإنتاج\", IFNULL(ExpiryDate,'') AS \"تاريخ الانتهاء\" " +
                 "FROM Products ORDER BY Category, Name");
             bool profits = Session.Can(Perm.Profits);
             ExcelExport.Save(this, "المخزون", new ExcelSheet
@@ -142,7 +152,9 @@ namespace ShopManager
                 Table = t,
                 Hide = profits ? new string[0] : new[] { "سعر الشراء", "عملة الشراء", "التكلفة (ل.س)", "قيمة المخزون (ل.س)" },
                 Totals = profits ? new[] { "قيمة المخزون (ل.س)", "قيمة المخزون بسعر البيع (ل.س)" } : new[] { "قيمة المخزون بسعر البيع (ل.س)" },
-                Highlight = r => Db.D(r["المخزون"]) <= Db.D(r["الحد الأدنى"]) && Db.D(r["الحد الأدنى"]) > 0
+                // بالأحمر: النواقص، والأصناف المنتهية الصلاحية
+                Highlight = r => (Db.D(r["المخزون"]) <= Db.D(r["الحد الأدنى"]) && Db.D(r["الحد الأدنى"]) > 0)
+                                 || ExpiryUtil.Of(r["تاريخ الانتهاء"]) == ExpiryUtil.State.Expired
             });
         }
 
@@ -169,7 +181,8 @@ namespace ShopManager
             {
                 { "Id", "رقم" }, { "Name", "الصنف" }, { "Barcode", "الباركود" }, { "Category", "القسم" },
                 { "CostPrice", "سعر الشراء" }, { "CostCurrency", "عملة الشراء" }, { "Margin", "نسبة الربح (-1 ثابت)" },
-                { "SellPrice", "سعر البيع (ل.س)" }, { "Stock", "المخزون" }, { "MinStock", "الحد الأدنى" }
+                { "SellPrice", "سعر البيع (ل.س)" }, { "Stock", "المخزون" }, { "MinStock", "الحد الأدنى" },
+                { "ProdDate", "تاريخ الإنتاج" }, { "ExpiryDate", "تاريخ الانتهاء" }
             };
             foreach (var kv in heads) if (grid.Columns[kv.Key] != null) grid.Columns[kv.Key].HeaderText = kv.Value;
             grid.Columns["Id"].ReadOnly = true;
@@ -177,6 +190,11 @@ namespace ShopManager
             grid.Columns["Name"].FillWeight = 170;
             grid.Columns["Category"].FillWeight = 80;
             grid.Columns["Margin"].FillWeight = 75;
+            foreach (var c in new[] { "ProdDate", "ExpiryDate" })
+            {
+                grid.Columns[c].FillWeight = 85;
+                grid.Columns[c].ToolTipText = "اختياري. مثل: 15/3/2027 أو 3/2027 أو 2027-03-15";
+            }
             ApplyFilter();
         }
 
@@ -217,6 +235,11 @@ namespace ShopManager
                 foreach (var col in new[] { "CostPrice", "SellPrice", "Stock", "MinStock" })
                     if (Blank(r[col])) r[col] = 0;
                 if (Blank(r["Margin"])) r["Margin"] = -1;
+                // التواريخ تُحفظ دائماً بصيغة yyyy-MM-dd (سبق التحقق منها في SaveChanges)
+                ExpiryUtil.TryParse(Convert.ToString(r["ProdDate"]), false, out string pd);
+                ExpiryUtil.TryParse(Convert.ToString(r["ExpiryDate"]), true, out string ed);
+                r["ProdDate"] = (object)pd ?? DBNull.Value;
+                r["ExpiryDate"] = (object)ed ?? DBNull.Value;
 
                 double cost = Db.D(r["CostPrice"]);
                 string cur = Convert.ToString(r["CostCurrency"]);
@@ -248,10 +271,19 @@ namespace ShopManager
                 grid.EndEdit();
                 BindingContext[tbl].EndCurrentEdit();
                 var noCat = new List<string>();
+                var badDate = new List<string>();
                 foreach (DataRow r in tbl.Rows)
                 {
                     if (r.RowState != DataRowState.Added && r.RowState != DataRowState.Modified) continue;
                     if (Blank(r["Category"])) noCat.Add(Convert.ToString(r["Name"]));
+                    if (!ExpiryUtil.TryParse(Convert.ToString(r["ProdDate"]), false, out _) ||
+                        !ExpiryUtil.TryParse(Convert.ToString(r["ExpiryDate"]), true, out _))
+                        badDate.Add(Convert.ToString(r["Name"]));
+                }
+                if (badDate.Count > 0)
+                {
+                    UI.Warn(this, "تاريخ غير مفهوم لهذه الأصناف. اكتبه مثل 15/3/2027 أو 3/2027 أو اتركه فارغاً:\n" + string.Join("\n", badDate.GetRange(0, Math.Min(badDate.Count, 10))));
+                    return false;
                 }
                 if (noCat.Count > 0)
                 {

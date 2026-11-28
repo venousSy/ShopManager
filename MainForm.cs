@@ -46,6 +46,7 @@ namespace ShopManager
             AddBtn(panel, "مرتجعات المبيعات", Color.FromArgb(150, 90, 30), Perm.SaleReturns, Keys.None, () => Open(new ReturnsForm(true, 0)));
             AddBtn(panel, "مرتجعات المشتريات", Color.FromArgb(110, 90, 30), Perm.PurchaseReturns, Keys.None, () => Open(new ReturnsForm(false, 0)));
             AddBtn(panel, "النواقص", Color.FromArgb(160, 40, 40), null, Keys.None, () => Open(new ShortagesForm()));
+            AddBtn(panel, "الصلاحية", Color.FromArgb(190, 90, 20), null, Keys.None, () => Open(new ExpiryForm()));
             AddBtn(panel, "أفضل الأصناف للفترة", Color.FromArgb(40, 120, 70), Perm.Profits, Keys.None, () => Open(new TopItemsForm()));
             AddBtn(panel, "التقارير والأرباح  (F6)", Color.FromArgb(0, 110, 110), Perm.Profits, Keys.F6, () => Open(new ReportsForm()));
             AddBtn(panel, "الإعدادات  (F7)", Color.FromArgb(80, 80, 80), Perm.Admin, Keys.F7, () => Open(new SettingsForm()));
@@ -188,8 +189,11 @@ namespace ShopManager
             long count = Convert.ToInt64(Db.Scalar("SELECT COUNT(*) FROM Sales WHERE substr(Date,1,10)=@p0", today));
             double cogs = Db.D(Db.Scalar("SELECT IFNULL(SUM(si.Qty*si.UnitCost),0) FROM SaleItems si JOIN Sales s ON s.Id=si.SaleId WHERE substr(s.Date,1,10)=@p0", today));
             long overLimit = Convert.ToInt64(Db.Scalar("SELECT COUNT(*) FROM (" + Sql.CustomerBaseSql() + ") WHERE Bal>" + Db.DebtLimit.ToString(CultureInfo.InvariantCulture)));
+            long expiring = 0;
+            try { expiring = ExpiryUtil.CountAlerts(); } catch { }
             lblToday.Text = (Session.User != null ? "المستخدم: " + Session.User.Name + "   |   " : "") +
-                            (overLimit > 0 ? "⚠ ديون فوق الحد: " + overLimit + "   |   " : "") + "اليوم:  مبيعات " + sales.ToString("N0") + " ل.س   |   فواتير " + count +
+                            (overLimit > 0 ? "⚠ ديون فوق الحد: " + overLimit + "   |   " : "") +
+                            (expiring > 0 ? "⚠ صلاحية: " + expiring + " صنف   |   " : "") +"اليوم:  مبيعات " + sales.ToString("N0") + " ل.س   |   فواتير " + count +
                             (Session.Can(Perm.Profits) ? "   |   ربح تقريبي " + (sales - cogs).ToString("N0") + " ل.س" : "") +
                             "   |   سعر الصرف " + Db.Rate.ToString("0.##", CultureInfo.InvariantCulture);
         }

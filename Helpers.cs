@@ -458,7 +458,7 @@ namespace ShopManager
             {
                 UI.Rtl(f);
                 f.Text = "إضافة صنف جديد إلى القائمة";
-                f.Width = 560; f.Height = 470;
+                f.Width = 560; f.Height = 560;
                 f.FormBorderStyle = FormBorderStyle.FixedDialog;
                 f.StartPosition = FormStartPosition.CenterParent;
                 f.MaximizeBox = false; f.MinimizeBox = false;
@@ -484,6 +484,10 @@ namespace ShopManager
                 row("القسم (مطلوب)", cmbCat);
                 row("نسبة الربح (0.15 = 15%)", txtMargin);
                 row("أو سعر بيع ثابت (ل.س)", txtSell);
+                var txtProd = new TextBox { PlaceholderText = "اختياري، مثل 1/2026" };
+                var txtExp = new TextBox { PlaceholderText = "اختياري، مثل 15/3/2027" };
+                row("تاريخ الإنتاج", txtProd);
+                row("تاريخ انتهاء الصلاحية", txtExp);
                 var note = new Label
                 {
                     Dock = DockStyle.Top, Height = 80, Padding = new Padding(16, 6, 16, 0),
@@ -501,10 +505,12 @@ namespace ShopManager
                     if (sell > 0) margin = -1;
                     else if (margin < 0) margin = 0.15;
                     string bc = txtBar.Text.Trim();
+                    if (!ExpiryUtil.TryParse(txtProd.Text, false, out string prod)) { UI.Warn(f, "تاريخ الإنتاج غير مفهوم. اكتبه مثل 1/2026 أو 15/1/2026 أو اتركه فارغاً."); return; }
+                    if (!ExpiryUtil.TryParse(txtExp.Text, true, out string exp)) { UI.Warn(f, "تاريخ الانتهاء غير مفهوم. اكتبه مثل 3/2027 أو 15/3/2027 أو اتركه فارغاً."); return; }
                     try
                     {
-                        Db.Exec("INSERT INTO Products(Name,Barcode,Category,CostPrice,CostCurrency,SellPrice,Stock,MinStock,Margin) VALUES(@p0,@p1,@p2,0,@p3,@p4,0,0,@p5)",
-                            n, bc == "" ? null : bc, cmbCat.Text.Trim(), cur, sell, margin);
+                        Db.Exec("INSERT INTO Products(Name,Barcode,Category,CostPrice,CostCurrency,SellPrice,Stock,MinStock,Margin,ProdDate,ExpiryDate) VALUES(@p0,@p1,@p2,0,@p3,@p4,0,0,@p5,@p6,@p7)",
+                            n, bc == "" ? null : bc, cmbCat.Text.Trim(), cur, sell, margin, prod, exp);
                         newId = Convert.ToInt32(Db.Scalar("SELECT Id FROM Products WHERE Name=@p0", n));
                         f.DialogResult = DialogResult.OK;
                     }

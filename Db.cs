@@ -295,6 +295,12 @@ namespace ShopManager
             get { int v = (int)Num(Get("freeze_days", "20")); return v <= 0 ? 20 : v; }
         }
 
+        /// <summary>كم يوماً قبل انتهاء الصلاحية يُنبَّه إلى الصنف (افتراضياً 30).</summary>
+        public static int ExpiryWarnDays
+        {
+            get { int v = (int)Num(Get("expiry_warn_days", "30")); return v <= 0 ? 30 : v; }
+        }
+
         public static double CustomerBalance(int customerId)
         {
             return D(Scalar("SELECT " + Sql.CustBal("@p0"), customerId));
@@ -430,6 +436,15 @@ namespace ShopManager
                 if (Convert.ToString(r["name"]) == "PrevBalance") hasPrev = true;
             if (!hasPrev) Exec("ALTER TABLE Sales ADD COLUMN PrevBalance REAL DEFAULT 0");
             if (!hasMargin) Exec("ALTER TABLE Products ADD COLUMN Margin REAL DEFAULT -1");
+            // تاريخ الإنتاج وتاريخ انتهاء الصلاحية (اختياريان، نص yyyy-MM-dd أو NULL)
+            bool hasExpiry = false;
+            foreach (DataRow r in Query("PRAGMA table_info(Products)").Rows)
+                if (Convert.ToString(r["name"]) == "ExpiryDate") hasExpiry = true;
+            if (!hasExpiry)
+            {
+                Exec("ALTER TABLE Products ADD COLUMN ProdDate TEXT");
+                Exec("ALTER TABLE Products ADD COLUMN ExpiryDate TEXT");
+            }
             if (!hasCur) Exec("ALTER TABLE Payments ADD COLUMN Currency TEXT DEFAULT 'SYP'");
             if (!hasRate) Exec("ALTER TABLE Payments ADD COLUMN Rate REAL DEFAULT 1");
 

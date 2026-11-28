@@ -332,6 +332,12 @@ namespace ShopManager
         {
             int id = Convert.ToInt32(p["Id"]);
             if (record) PushDraft("إضافة صنف");
+            if (sale && p.Table.Columns.Contains("ExpiryDate"))
+            {
+                var st = ExpiryUtil.Of(p["ExpiryDate"]);
+                if (st == ExpiryUtil.State.Expired) Status("⚠ انتبه: \"" + p["Name"] + "\" منتهي الصلاحية منذ " + p["ExpiryDate"] + ".", true);
+                else if (st == ExpiryUtil.State.Soon) Status("تنبيه: \"" + p["Name"] + "\" تنتهي صلاحيته في " + p["ExpiryDate"] + ".", true);
+            }
             foreach (DataGridViewRow r in grid.Rows)
             {
                 if (Convert.ToInt32(r.Cells["Id"].Value) == id)
